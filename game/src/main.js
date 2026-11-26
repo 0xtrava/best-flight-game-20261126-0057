@@ -184,12 +184,14 @@ function main() {
     camera.lookAt(look);
   }
 
-  // Hero camera (v5, staged cover shot only): front-left 3/4, on the
-  // SUNLIT side. The old chase view sat directly behind the plane, so the
-  // wing was a huge flat white slab hiding the fuselage — it read as a
-  // paper cutout. From here the nose, spinner, prop blur, cabin windows
-  // and cheatline are all visible, the plane is big in frame, and the next
-  // ring still sits in the background beyond it. Never used in live play.
+  // Hero camera (v5 front-left 3/4, RESTORED): nose, spinner, prop blur,
+  // cabin windows and cheatline all visible, plane big in frame. A v6
+  // rear-left 3/4 was tried so the ring could share the frame — the ring
+  // DID appear, but from behind the banked plane reads as a red blob with
+  // a giant white wing-bar and the tail clips the frame edge. The ring
+  // cannot share the frame with a big plane from any rear angle, and the
+  // front hero is the shot that sells the plane — the HUD carries the
+  // ring info ("RING 2 / 70 m" + chevron). Never used in live play.
   function updateHeroCamera() {
     const fwd = forwardVector(flight.state.yaw, flight.state.pitch);
     const up = new THREE.Vector3(0, 1, 0);
@@ -201,9 +203,7 @@ function main() {
     camera.position.copy(pos);
     // Look just ahead of the plane, not 16 m out: the look target sets
     // the frame centre, and a far target pushes the plane itself off the
-    // frame edge (52° off-axis). The ring sits ~90° off this axis from
-    // a side camera, so it cannot share the frame with a big plane —
-    // the hero shot is the plane + coast, the HUD carries the ring info.
+    // frame edge (52° off-axis).
     // v5.1 sat too close to the wing (5 m): the near wing filled the
     // frame as a flat maroon slab. Pulled back + more to the front, so
     // the wing reads as a wing and the nose + windows carry the shot.

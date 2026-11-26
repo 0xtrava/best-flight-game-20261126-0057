@@ -23,70 +23,70 @@ export function buildPlaneModel() {
   // The prop blades and disc fade to a blur in the cockpit view (see main.js).
   const bladeMat = new THREE.MeshPhongMaterial({ color: DARK, shininess: 30, transparent: true, opacity: 1 });
   const discMat = new THREE.MeshBasicMaterial({ color: 0xd8d8d8, transparent: true, opacity: 0.04, side: THREE.DoubleSide });
-  const glass = new THREE.MeshPhongMaterial({ color: 0x18242e, shininess: 180, transparent: true, opacity: 0.92 });
+  const glass = new THREE.MeshPhongMaterial({ color: 0x18242e, shininess: 180, transparent: true, opacity: 0.92, side: THREE.DoubleSide });
 
-  // Fuselage: long tapered cylinder along Z (nose at -Z), fat at the nose.
-  // CylinderGeometry's radiusTop lands at +Z after the X-rotation, so the
-  // small radius goes first: thin tail, fat nose. 24 segments (was 16):
-  // the rounder cross-section catches the sun as a gradient, not a facet.
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.40, 0.62, 5.4, 24), white);
-  body.rotation.x = Math.PI / 2;
-  body.castShadow = true;
-  group.add(body);
+  // Fuselage: a LATHE profile, not a tube. The v5 fuselage was one uniform
+  // cylinder (r 0.40→0.62) with a ball nose and a boxy cabin on top — from
+  // any angle it read as a plain white tube, and the user called it exactly
+  // that ("kayak tabung"). The profile below is the Cessna silhouette from
+  // the reference photo: narrow cowl, FAT cabin (the widest station), then
+  // a long taper down to a thin tail cone under the grey fin. LatheGeometry
+  // rotates the profile around the fuselage axis; points are (radius, z)
+  // with the nose at -Z. After rotation.x = PI/2, local +Y lands at +Z,
+  // local +Z lands at world -Y (the belly), local +X stays world +X — so
+  // phi 0 is the belly, phi PI/2 the +X side, phi PI the roof.
+  const PROFILE = [
+    [0.16, -2.90], // nose tip (spinner covers the front)
+    [0.38, -2.70], // cowl front
+    [0.50, -2.30], // cowl max
+    [0.58, -1.70], // windshield base
+    [0.65, -1.10], // cabin front
+    [0.68, -0.50], // cabin max — the fattest station
+    [0.68, -0.10],
+    [0.62, 0.50], // cabin rear
+    [0.50, 1.20], // tail taper
+    [0.38, 1.80],
+    [0.26, 2.30], // tail cone
+    [0.16, 2.70],
+    [0.10, 2.90], // tail tip
+  ];
+  // Lathe points for the profile stations inside [zMin, zMax], radius
+  // bumped by `extra` so shells (belly, stripes, glass) sit proud of the
+  // white body instead of z-fighting it.
+  const profilePoints = (zMin, zMax, extra = 0) =>
+    PROFILE.filter(([, z]) => z >= zMin && z <= zMax)
+      .map(([r, z]) => new THREE.Vector2(r + extra, z));
+  const lathe = (zMin, zMax, extra, phiStart, phiLength, material) => {
+    const m = new THREE.Mesh(
+      new THREE.LatheGeometry(profilePoints(zMin, zMax, extra), 24, phiStart, phiLength),
+      material,
+    );
+    m.rotation.x = Math.PI / 2;
+    m.castShadow = true;
+    group.add(m);
+    return m;
+  };
+  // White body: full profile, full circle.
+  lathe(-2.90, 2.90, 0, 0, Math.PI * 2, white);
   // Maroon belly: a half-shell wrapped around the lower fuselage, so the
   // two-tone split reads from the side exactly like the reference photo.
-  // (Local -Z maps to world -Y after the X-rotation, so theta in
-  // [-PI/2, PI/2] is the bottom half.)
   const bellyMat = new THREE.MeshPhongMaterial({ color: MAROON, shininess: 70, specular: 0x662222, side: THREE.DoubleSide });
-  const belly = new THREE.Mesh(new THREE.CylinderGeometry(0.41, 0.63, 5.0, 24, 1, true, -Math.PI / 2, Math.PI), bellyMat);
-  belly.rotation.x = Math.PI / 2;
-  belly.position.z = 0.1;
-  group.add(belly);
-  // Rounded white nose cowl.
-  const cowl = new THREE.Mesh(new THREE.SphereGeometry(0.64, 24, 18), white);
-  cowl.scale.set(1, 0.85, 1.15);
-  cowl.position.z = -2.55;
-  cowl.castShadow = true;
-  group.add(cowl);
-  // Maroon cheatline stripe along each fuselage side at window level: thin
-  // shell bands that hug the taper (a straight box would ridge at the tail).
-  // Band covers world y in [-0.08, +0.28]; theta ranges pick out the sides.
-  for (const thetaStart of [1.41, 4.11]) {
-    const stripe = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.45, 0.57, 3.0, 24, 1, true, thetaStart, 0.76),
-      bellyMat,
-    );
-    stripe.rotation.x = Math.PI / 2;
-    stripe.position.z = 0.2;
-    group.add(stripe);
+  lathe(-2.90, 2.90, 0.012, -Math.PI / 2, Math.PI, bellyMat);
+  // Maroon cheatline stripe along each fuselage side at window level.
+  for (const phiStart of [Math.PI / 2 - 0.35, (3 * Math.PI) / 2 - 0.35]) {
+    lathe(-2.30, 1.20, 0.015, phiStart, 0.7, bellyMat);
   }
-  // Cabin: the boxy Cessna cabin with big dark windows, sitting above the
-  // fuselage line under the high wing.
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.12, 0.8, 1.7), white);
-  cabin.position.set(0, 0.42, -0.35);
-  cabin.castShadow = true;
-  group.add(cabin);
-  const cabinRoof = new THREE.Mesh(new THREE.BoxGeometry(1.14, 0.08, 1.7), white);
-  cabinRoof.position.set(0, 0.86, -0.35);
-  group.add(cabinRoof);
-  // Big dark side windows — the Cessna signature. Larger in v5 (taller +
-  // longer, plus a small rear window each side) so the glass reads as real
-  // windows from the hero angle instead of thin dark slits.
-  for (const side of [-1, 1]) {
-    const win = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.62, 1.35), glass);
-    win.position.set(side * 0.58, 0.5, -0.35);
-    group.add(win);
-    const rear = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.45, 0.7), glass);
-    rear.position.set(side * 0.58, 0.48, 0.55);
-    group.add(rear);
+  // Big dark side windows — curved lathe shells that HUG the fuselage (a
+  // flat box on a round body sticks out at its top edge like a slab).
+  // Front window + smaller rear window, each side, upper-side band.
+  for (const phiStart of [Math.PI / 2 - 0.12, (3 * Math.PI) / 2 - 0.60]) {
+    lathe(-1.10, -0.10, 0.008, phiStart, 0.72, glass);
+    lathe(0.50, 1.20, 0.008, phiStart, 0.72, glass);
   }
-  // Windshield: sloped dark glass at the front of the cabin (bottom forward,
-  // top raked back toward the roof). Hidden in the cockpit view (main.js
-  // toggles canopy.visible), so the pilot sees out.
-  const canopy = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.55, 0.06), glass);
-  canopy.position.set(0, 0.55, -1.18);
-  canopy.rotation.x = 0.45;
-  group.add(canopy);
+  // Windshield: sloped dark glass wrapping the top-front of the cabin.
+  // Hidden in the cockpit view (main.js toggles canopy.visible), so the
+  // pilot sees out.
+  const canopy = lathe(-1.70, -1.10, 0.008, Math.PI - 0.85, 1.7, glass);
   // High wing: ONE straight wing on top of the cabin (Cessna style), slight
   // dihedral, white with maroon tips — the single most recognisable part of
   // the reference plane. Two halves so the dihedral reads cleanly.
@@ -152,24 +152,28 @@ export function buildPlaneModel() {
   prop.add(disc);
   prop.position.z = -3.35;
   group.add(prop);
-  // Landing gear: fixed TRICYCLE gear like the photo — nose wheel plus two
-  // mains, each with a white wheel fairing (spat) the tyre peeks out of.
-  const gearLeg = (x, z, wheelY) => {
-    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.95, 6), dark);
-    strut.position.set(x, -0.95, z);
+  // Landing gear: fixed TRICYCLE gear like the photo — SMALL dark tires on
+  // THIN light-grey struts. v5's big white wheel fairings (spats) were
+  // round white spheres hanging under the plane and read as lamps — the
+  // user called it exactly that ("masa di roda ada kayak lampu"). Deleted
+  // outright: no spats, no white spheres anywhere near the wheels.
+  const legMat = new THREE.MeshPhongMaterial({ color: 0x9aa0a6, shininess: 60 });
+  const gearLeg = (x, z) => {
+    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.95, 6), legMat);
+    strut.position.set(x, -1.0, z);
     group.add(strut);
-    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.26, 12), dark);
-    wheel.rotation.z = Math.PI / 2;
-    wheel.position.set(x, wheelY, z);
-    group.add(wheel);
-    const spat = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 10), white);
-    spat.scale.set(0.8, 1.15, 1.5);
-    spat.position.set(x, wheelY + 0.28, z);
-    group.add(spat);
+    const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.13, 14), dark);
+    tire.rotation.z = Math.PI / 2;
+    tire.position.set(x, -1.45, z);
+    group.add(tire);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.10, 0.15, 10), grey);
+    hub.rotation.z = Math.PI / 2;
+    hub.position.set(x, -1.45, z);
+    group.add(hub);
   };
-  gearLeg(0, -1.9, -1.38);
-  gearLeg(-0.8, 0.35, -1.42);
-  gearLeg(0.8, 0.35, -1.42);
+  gearLeg(0, -1.9);
+  gearLeg(-0.8, 0.35);
+  gearLeg(0.8, 0.35);
   // Navigation lights: red left, green right, white tail.
   const light = (color, x, y, z) => {
     const m = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshBasicMaterial({ color }));
