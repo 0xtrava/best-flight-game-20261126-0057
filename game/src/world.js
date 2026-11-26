@@ -43,8 +43,11 @@ function buildSky(scene, rng) {
         vec3 col = mix(horizon, mid, smoothstep(0.0, 0.22, h));
         col = mix(col, zenith, smoothstep(0.18, 0.75, h));
         float sun = max(dot(normalize(vDir), sunDir), 0.0);
-        col += vec3(1.0, 0.55, 0.18) * pow(sun, 90.0) * 1.6;
-        col += vec3(1.0, 0.62, 0.28) * pow(sun, 7.0) * 0.35;
+        // Smaller, warmer sun: a tight bright core + a soft halo, so the
+        // ring and the plane stay the brightest readable elements instead
+        // of drowning in a blown white-yellow wash (v3 cover flaw).
+        col += vec3(1.0, 0.55, 0.18) * pow(sun, 150.0) * 1.15;
+        col += vec3(1.0, 0.62, 0.28) * pow(sun, 12.0) * 0.22;
         gl_FragColor = vec4(col, 1.0);
       }`,
   });
@@ -91,15 +94,19 @@ function buildTerrain(scene) {
     else if (h < 2.5) c.copy(sand);
     else if (h < 26) {
       c.copy(grassA).lerp(grassB, patch);
-      if (patch2 > 0.72) c.copy(wheat).lerp(c, 0.3); // golden field patches
+      if (patch2 > 0.6) c.copy(wheat).lerp(c, 0.12); // golden field patches
+      else if (patch2 < 0.22) c.lerp(forest, 0.4); // darker meadow patches
     } else if (h < 50) c.copy(grassB).lerp(forest, clamp((h - 26) / 24, 0, 1));
     else c.copy(rock).lerp(rockLight, clamp((h - 60) / 40, 0, 1) * 0.6);
-    // Farmland stripes on the gentle slopes + large-scale mottling.
+    // Farmland stripes on the gentle slopes + large-scale mottling + a
+    // finer mottle so the big green fields break up instead of reading flat.
     if (h > 2 && h < 22) {
       const stripe = Math.sin((x + z) * 0.11) > 0 ? 1 : 0.85;
       c.multiplyScalar(stripe);
     }
+    const patch3 = 0.5 + 0.5 * Math.sin(x * 0.071 + 0.5) * Math.sin(z * 0.063 - 0.8);
     c.multiplyScalar(0.94 + patch2 * 0.1);
+    c.multiplyScalar(0.96 + patch3 * 0.08);
     colors[i * 3] = c.r;
     colors[i * 3 + 1] = c.g;
     colors[i * 3 + 2] = c.b;
@@ -200,9 +207,11 @@ function buildClouds(scene, rng) {
 function buildRunway(scene) {
   const group = new THREE.Group();
   const y = RUNWAY.altitude + 0.15;
+  // Lighter strip so the runway reads in the menu/end shots instead of a
+  // black void (v3 flaw): warm light-grey asphalt, sun landing on it.
   const strip = new THREE.Mesh(
     new THREE.PlaneGeometry(RUNWAY.width, RUNWAY.length),
-    new THREE.MeshLambertMaterial({ color: 0x565a63 }),
+    new THREE.MeshLambertMaterial({ color: 0x75787e }),
   );
   strip.rotation.x = -Math.PI / 2;
   strip.rotation.z = RUNWAY.heading;
@@ -370,9 +379,12 @@ function buildCrags(scene) {
     const z = (rng() - 0.5) * 2200;
     const h = terrainHeight(x, z);
     if (h < 28 || h > 90) continue;
+    // Never near the airstrip: boulders on the hillside behind the runway
+    // read as beige blobs floating on the slope in the menu/end shots (v3).
+    if (Math.hypot(x - RUNWAY.x, z - RUNWAY.z) < 350) continue;
     const s = 2 + rng() * 4;
     const b = new THREE.Mesh(boulderGeo, rockMat);
-    b.position.set(x, h + s * 0.3, z);
+    b.position.set(x, h - s * 0.15, z); // sunk into the slope, clearly grounded
     b.scale.setScalar(s);
     b.rotation.set(rng() * 3, rng() * 3, rng() * 3);
     scene.add(b);
@@ -410,8 +422,8 @@ export function buildWorld(scene, seed = 1) {
   const rim = new THREE.DirectionalLight(0xbfd4ff, 0.45);
   rim.position.set(350, 240, 650);
   scene.add(rim);
-  scene.add(new THREE.HemisphereLight(0x8fb0e0, 0x5a4a3a, 1.5));
-  scene.add(new THREE.AmbientLight(0x604a38, 0.7));
+  scene.add(new THREE.HemisphereLight(0x8fb0e0, 0x5a4a3a, 1.7));
+  scene.add(new THREE.AmbientLight(0x604a38, 0.8));
 
   const dome = buildSky(scene, rng);
   const terrain = buildTerrain(scene);

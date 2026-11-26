@@ -23,12 +23,11 @@ export function stageShot(name, G) {
     G.flight.state.speed = 0;
     G.setState('menu');
     G.setCameraMode('orbit');
-    G.setOrbitAngle(-0.6); // from the south-west, looking north-east ALONG
-    // the runway: a front-left 3/4 view — nose, prop, canopy and the
-    // maroon belly face the camera, the runway runs away to the northern
-    // sea, the town climbs the eastern hillside and the sunset glows
-    // ahead. (Looking east into the hillside fills the frame with dark
-    // slope; looking along the strip opens it up.)
+    G.setOrbitAngle(0.79); // camera south-east of the plane, looking
+    // north-west: the view runs over open sea and the horizon, not into
+    // the dark eastern hillside (v3 looked north-east, the worst
+    // direction — sampled mean height 37 m, no sea). The plane's sunlit
+    // east side faces the camera as a front-right 3/4.
     G.setOrbitRadius(14);
     document.body.classList.add('shot-frame');
     G.hud.showMenu(0);
@@ -97,7 +96,7 @@ export function stageShot(name, G) {
     G.setElapsed(522);
     G.setState('results');
     G.setCameraMode('orbit');
-    G.setOrbitAngle(-0.6);
+    G.setOrbitAngle(0.79); // same sea view as the menu shot (v4)
     G.setOrbitRadius(13);
     document.body.classList.add('shot-frame');
     // Landed: no next ring to point at.

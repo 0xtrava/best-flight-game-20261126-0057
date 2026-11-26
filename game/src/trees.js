@@ -3,7 +3,7 @@
 // the town, the beaches and the runway, scattered on the hills.
 
 import * as THREE from 'three';
-import { RUNWAY, terrainHeight, mulberry32 } from './config.js';
+import { RUNWAY, RINGS, terrainHeight, mulberry32 } from './config.js';
 
 // True while the point sits near the airstrip (runway + approaches): keep
 // the strip and its final approach clear of trees.
@@ -57,6 +57,43 @@ export function buildTrees(scene, seed = 1) {
     const z = RUNWAY.z + Math.sin(a) * r;
     const h = terrainHeight(x, z);
     if (h > 5 && h < 38 && !nearRunway(x, z)) broadleaf.push([x, h, z]);
+  }
+  // v4: palms framing the airstrip (clear of the pavement, clear of the
+  // approach line) so the menu/end shots get green at the strip's edge.
+  for (let i = 0; i < 12; i++) {
+    const z = RUNWAY.z - 130 + i * 26;
+    for (const side of [-1, 1]) {
+      const x = RUNWAY.x + side * (34 + rng() * 10);
+      const h = terrainHeight(x, z);
+      if (h > 1) palms.push([x, h, z]);
+    }
+  }
+  // v4: clusters along the ring course so the play shot reads less empty.
+  // Midpoints between consecutive rings, offset perpendicular so nothing
+  // sits on the ring line itself or in the final approach.
+  for (let i = 0; i < RINGS.length; i++) {
+    const a = RINGS[i];
+    const b = RINGS[(i + 1) % RINGS.length];
+    const mx = (a.x + b.x) / 2;
+    const mz = (a.z + b.z) / 2;
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const px = -dz / len;
+    const pz = dx / len;
+    for (const k of [-1, 1]) {
+      const off = (34 + rng() * 26) * k;
+      const x = mx + px * off;
+      const z = mz + pz * off;
+      const h = terrainHeight(x, z);
+      if (nearRunway(x, z)) continue;
+      if (h > 5 && h < 38) broadleaf.push([x, h, z]);
+      else if (h >= 1.2 && h < 6) palms.push([x, h, z]);
+    }
+    const bx = mx + px * (18 + rng() * 10);
+    const bz = mz + pz * (18 + rng() * 10);
+    const bh = terrainHeight(bx, bz);
+    if (bh > 2 && bh < 45 && !nearRunway(bx, bz)) bushes.push([bx, bh, bz]);
   }
 
   // ---- palms: tilted trunk + a fan of drooping fronds -------------------

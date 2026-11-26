@@ -95,11 +95,14 @@ function main() {
       cameraMode = m;
       hud.setCockpit(m === 'cockpit');
       plane.canopy.visible = m !== 'cockpit';
-      // In the cockpit the prop is right in front of the camera: hide the
-      // whole prop (disc + blades) — at 1 m it veils the view. The blades
-      // read as black bars; the disc as a grey slab.
+      // Cockpit: the whole prop stays HIDDEN. A faint prop blur was tried
+      // in v4 — but a 3.4 m blade 2.25 m from the camera subtends ~74°,
+      // so even at 0.15 opacity it reads as a dark diagonal band across
+      // the frame (the v2 slab, back again). The nose cowl at the bottom
+      // of the frame is the aircraft cue; the prop blur is not worth the
+      // slab. Chase view keeps the full prop + disc.
       plane.prop.visible = m !== 'cockpit';
-      plane.bladeMat.opacity = m === 'cockpit' ? 0.22 : 1;
+      plane.bladeMat.opacity = m === 'cockpit' ? 0 : 1;
       plane.discMat.opacity = m === 'cockpit' ? 0 : 0.04;
     },
     setOrbitAngle(a) {
@@ -176,13 +179,13 @@ function main() {
   }
 
   function updateCockpitCamera() {
-    // Sit just ahead of the high wing's leading edge, above the nose, looking
-    // over the nose and the spinning prop: the wing stays behind the camera
-    // (it would fill the frame from the old seat), the runway stays in frame,
-    // and the prop reads small instead of filling the screen.
+    // Sit just behind the nose, above the cowl: the white nose + maroon
+    // belly read at the bottom of the frame (v3 sat ahead of the wing and
+    // the shot had no aircraft in it at all), the runway stays dead ahead,
+    // and the prop is a faint blur 2 m out instead of a slab at 1 m.
     const fwd = forwardVector(flight.state.yaw, flight.state.pitch);
     const up = new THREE.Vector3(0, 1, 0);
-    const pos = flight.state.pos.clone().addScaledVector(up, 0.95).addScaledVector(fwd, 2.2);
+    const pos = flight.state.pos.clone().addScaledVector(up, 1.12).addScaledVector(fwd, 1.1);
     camera.position.copy(pos);
     const look = flight.state.pos.clone().addScaledVector(fwd, 120).addScaledVector(up, -5);
     // Roll the horizon with the plane: tilt the camera up vector.
@@ -196,7 +199,7 @@ function main() {
     const target = flight.state.pos.clone().add(new THREE.Vector3(0, 1.5, 0));
     camera.position.set(
       target.x + Math.sin(orbitAngle) * r,
-      target.y + r * 0.35, // low enough that the horizon and sky stay in
+      target.y + r * 0.5, // high enough that the horizon and sky stay in
       target.z + Math.cos(orbitAngle) * r, // frame instead of only the slope
     );
     camera.lookAt(target);
