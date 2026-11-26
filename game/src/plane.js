@@ -13,7 +13,10 @@ const DARK = 0x16181c;
 
 export function buildPlaneModel() {
   const group = new THREE.Group();
-  const white = new THREE.MeshPhongMaterial({ color: WHITE, shininess: 80, specular: 0x9a8a70 });
+  // Slightly warmer/darker white + stronger specular: the flat 0xf5f2ea
+  // read as a featureless white slab under ACES. The sheen along the
+  // fuselage curve now gives the body a 3D read (v5).
+  const white = new THREE.MeshPhongMaterial({ color: 0xeee7d6, shininess: 110, specular: 0xb09a72 });
   const maroon = new THREE.MeshPhongMaterial({ color: MAROON, shininess: 70, specular: 0x662222 });
   const grey = new THREE.MeshPhongMaterial({ color: GREY, shininess: 40, specular: 0x555555 });
   const dark = new THREE.MeshPhongMaterial({ color: DARK, shininess: 30 });
@@ -24,8 +27,9 @@ export function buildPlaneModel() {
 
   // Fuselage: long tapered cylinder along Z (nose at -Z), fat at the nose.
   // CylinderGeometry's radiusTop lands at +Z after the X-rotation, so the
-  // small radius goes first: thin tail, fat nose.
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.40, 0.62, 5.4, 16), white);
+  // small radius goes first: thin tail, fat nose. 24 segments (was 16):
+  // the rounder cross-section catches the sun as a gradient, not a facet.
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.40, 0.62, 5.4, 24), white);
   body.rotation.x = Math.PI / 2;
   body.castShadow = true;
   group.add(body);
@@ -34,12 +38,12 @@ export function buildPlaneModel() {
   // (Local -Z maps to world -Y after the X-rotation, so theta in
   // [-PI/2, PI/2] is the bottom half.)
   const bellyMat = new THREE.MeshPhongMaterial({ color: MAROON, shininess: 70, specular: 0x662222, side: THREE.DoubleSide });
-  const belly = new THREE.Mesh(new THREE.CylinderGeometry(0.41, 0.63, 5.0, 16, 1, true, -Math.PI / 2, Math.PI), bellyMat);
+  const belly = new THREE.Mesh(new THREE.CylinderGeometry(0.41, 0.63, 5.0, 24, 1, true, -Math.PI / 2, Math.PI), bellyMat);
   belly.rotation.x = Math.PI / 2;
   belly.position.z = 0.1;
   group.add(belly);
   // Rounded white nose cowl.
-  const cowl = new THREE.Mesh(new THREE.SphereGeometry(0.64, 16, 12), white);
+  const cowl = new THREE.Mesh(new THREE.SphereGeometry(0.64, 24, 18), white);
   cowl.scale.set(1, 0.85, 1.15);
   cowl.position.z = -2.55;
   cowl.castShadow = true;
@@ -49,7 +53,7 @@ export function buildPlaneModel() {
   // Band covers world y in [-0.08, +0.28]; theta ranges pick out the sides.
   for (const thetaStart of [1.41, 4.11]) {
     const stripe = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.45, 0.57, 3.0, 16, 1, true, thetaStart, 0.76),
+      new THREE.CylinderGeometry(0.45, 0.57, 3.0, 24, 1, true, thetaStart, 0.76),
       bellyMat,
     );
     stripe.rotation.x = Math.PI / 2;
@@ -65,11 +69,16 @@ export function buildPlaneModel() {
   const cabinRoof = new THREE.Mesh(new THREE.BoxGeometry(1.14, 0.08, 1.7), white);
   cabinRoof.position.set(0, 0.86, -0.35);
   group.add(cabinRoof);
-  // Big dark side windows — the Cessna signature.
+  // Big dark side windows — the Cessna signature. Larger in v5 (taller +
+  // longer, plus a small rear window each side) so the glass reads as real
+  // windows from the hero angle instead of thin dark slits.
   for (const side of [-1, 1]) {
-    const win = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.5, 1.1), glass);
+    const win = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.62, 1.35), glass);
     win.position.set(side * 0.58, 0.5, -0.35);
     group.add(win);
+    const rear = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.45, 0.7), glass);
+    rear.position.set(side * 0.58, 0.48, 0.55);
+    group.add(rear);
   }
   // Windshield: sloped dark glass at the front of the cabin (bottom forward,
   // top raked back toward the roof). Hidden in the cockpit view (main.js
@@ -101,9 +110,9 @@ export function buildPlaneModel() {
     group.add(cap);
     // Wing strut: the diagonal brace from the lower fuselage to the wing —
     // the Cessna signature. Lower end on the fuselage side, upper end under
-    // the wing at about 40% span.
+    // the wing at about 40% span. Thicker in v5 (0.09) so it reads in shots.
     const strutLen = Math.hypot(1.75, 1.25);
-    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, strutLen, 6), white);
+    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, strutLen, 6), white);
     strut.position.set(side * 1.32, 0.28, -0.3);
     strut.rotation.z = -side * Math.atan2(1.75, 1.25);
     group.add(strut);
@@ -128,8 +137,9 @@ export function buildPlaneModel() {
   }
   // Propeller: dark spinner + TWO black blades (like the photo) + a
   // translucent spin disc so the prop reads as a blur in flight.
+  // Bigger spinner cone in v5 so the nose has a visible centre.
   const prop = new THREE.Group();
-  const hub = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.55, 10), dark);
+  const hub = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.7, 12), dark);
   hub.rotation.x = -Math.PI / 2;
   prop.add(hub);
   for (let i = 0; i < 2; i++) {
@@ -169,6 +179,15 @@ export function buildPlaneModel() {
   light(0xff2a2a, -5.85, 1.18, -0.3);
   light(0x2aff66, 5.85, 1.18, -0.3);
   light(0xffffff, 0, 0.35, 2.95);
+  // Landing lights: bright lenses under the wing leading edge — they catch
+  // the eye in the hero shot and sell "real plane" at a glance (v5).
+  const lensMat = new THREE.MeshBasicMaterial({ color: 0xfff2c0 });
+  for (const side of [-1, 1]) {
+    const lens = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), lensMat);
+    lens.scale.set(1, 0.7, 1.4);
+    lens.position.set(side * 2.2, 0.9, -1.28);
+    group.add(lens);
+  }
 
   group.traverse((o) => {
     if (o.isMesh) o.castShadow = true;

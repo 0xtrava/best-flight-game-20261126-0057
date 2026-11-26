@@ -42,12 +42,15 @@ function buildSky(scene, rng) {
         vec3 horizon = vec3(1.00, 0.55, 0.22);
         vec3 col = mix(horizon, mid, smoothstep(0.0, 0.22, h));
         col = mix(col, zenith, smoothstep(0.18, 0.75, h));
+        // Warm haze band hugging the horizon so the sky melts into the
+        // sea instead of ending in a hard orange line (v5).
+        col = mix(col, vec3(1.00, 0.78, 0.55), smoothstep(0.10, 0.0, h) * 0.45);
         float sun = max(dot(normalize(vDir), sunDir), 0.0);
-        // Smaller, warmer sun: a tight bright core + a soft halo, so the
-        // ring and the plane stay the brightest readable elements instead
-        // of drowning in a blown white-yellow wash (v3 cover flaw).
-        col += vec3(1.0, 0.55, 0.18) * pow(sun, 150.0) * 1.15;
-        col += vec3(1.0, 0.62, 0.28) * pow(sun, 12.0) * 0.22;
+        // Smaller, warmer sun (v5: tighter still): the core stays a small
+        // bright point instead of a blown disc, so the plane and the ring
+        // stay the brightest readable elements.
+        col += vec3(1.0, 0.55, 0.18) * pow(sun, 240.0) * 0.85;
+        col += vec3(1.0, 0.62, 0.28) * pow(sun, 18.0) * 0.15;
         gl_FragColor = vec4(col, 1.0);
       }`,
   });
@@ -94,19 +97,21 @@ function buildTerrain(scene) {
     else if (h < 2.5) c.copy(sand);
     else if (h < 26) {
       c.copy(grassA).lerp(grassB, patch);
-      if (patch2 > 0.6) c.copy(wheat).lerp(c, 0.12); // golden field patches
-      else if (patch2 < 0.22) c.lerp(forest, 0.4); // darker meadow patches
+      if (patch2 > 0.55) c.copy(wheat).lerp(c, 0.3); // golden field patches
+      else if (patch2 < 0.28) c.lerp(forest, 0.55); // darker forest patches
     } else if (h < 50) c.copy(grassB).lerp(forest, clamp((h - 26) / 24, 0, 1));
     else c.copy(rock).lerp(rockLight, clamp((h - 60) / 40, 0, 1) * 0.6);
     // Farmland stripes on the gentle slopes + large-scale mottling + a
     // finer mottle so the big green fields break up instead of reading flat.
     if (h > 2 && h < 22) {
-      const stripe = Math.sin((x + z) * 0.11) > 0 ? 1 : 0.85;
+      const stripe = Math.sin((x + z) * 0.11) > 0 ? 1 : 0.8;
       c.multiplyScalar(stripe);
     }
     const patch3 = 0.5 + 0.5 * Math.sin(x * 0.071 + 0.5) * Math.sin(z * 0.063 - 0.8);
+    const patch4 = 0.5 + 0.5 * Math.sin(x * 0.19 + 2.2) * Math.sin(z * 0.17 - 0.4);
     c.multiplyScalar(0.94 + patch2 * 0.1);
     c.multiplyScalar(0.96 + patch3 * 0.08);
+    c.multiplyScalar(0.95 + patch4 * 0.1);
     colors[i * 3] = c.r;
     colors[i * 3 + 1] = c.g;
     colors[i * 3 + 2] = c.b;
@@ -122,22 +127,25 @@ function buildTerrain(scene) {
 
 function buildSea(scene) {
   const glitter = canvasTexture(256, (g, s) => {
-    g.fillStyle = '#0b3d5c';
+    g.fillStyle = '#0e4a6b';
     g.fillRect(0, 0, s, s);
-    for (let i = 0; i < 900; i++) {
+    // Sun glint: many more warm sparkles, some bigger, so the water
+    // reads as glittering instead of a flat dark band (v5).
+    for (let i = 0; i < 1500; i++) {
       const x = Math.random() * s;
       const y = Math.random() * s;
-      const a = 0.15 + Math.random() * 0.5;
+      const a = 0.15 + Math.random() * 0.55;
       g.fillStyle = `rgba(255, 214, 150, ${a})`;
-      g.fillRect(x, y, 1 + Math.random() * 2, 1 + Math.random() * 2);
+      const w = 1 + Math.random() * (Math.random() < 0.08 ? 4 : 2);
+      g.fillRect(x, y, w, w);
     }
   });
-  glitter.repeat.set(24, 24);
+  glitter.repeat.set(32, 32);
   const mat = new THREE.MeshPhongMaterial({
-    color: 0x1a5f7a,
+    color: 0x256b87,
     map: glitter,
-    shininess: 220,
-    specular: 0xffc27a,
+    shininess: 320,
+    specular: 0xffd9a0,
     transparent: true,
     opacity: 1.0,
   });
@@ -149,42 +157,32 @@ function buildSea(scene) {
 }
 
 function buildClouds(scene, rng) {
-  // A lumpy cluster of puffs, not one smooth disc: a single radial
-  // gradient reads as a grey oval against the sun glow (v2/v3 cover flaw).
-  const tex = canvasTexture(128, (g, s) => {
-    const puff = (cx, cy, r, a) => {
-      const grad = g.createRadialGradient(cx, cy, 2, cx, cy, r);
-      grad.addColorStop(0, `rgba(255, 244, 230, ${a})`);
-      grad.addColorStop(0.6, `rgba(255, 236, 220, ${a * 0.5})`);
-      grad.addColorStop(1, 'rgba(255, 236, 220, 0)');
-      g.fillStyle = grad;
-      g.fillRect(0, 0, s, s);
-    };
-    puff(s * 0.5, s * 0.55, s * 0.34, 0.9);
-    puff(s * 0.3, s * 0.62, s * 0.22, 0.7);
-    puff(s * 0.72, s * 0.6, s * 0.24, 0.7);
-    puff(s * 0.55, s * 0.4, s * 0.2, 0.6);
-  });
+  // REAL 3D clouds in v5: each cloud is a cluster of flattened puffs
+  // (Lambert-shaded, so the sun warms one side and shades the other).
+  // The old billboard sprites always faced the camera and read flat —
+  // that is what made the sky look cheap. Normal-blended, never additive:
+  // additive clouds looked like glowing orbs and threw a dark diagonal
+  // veil across the cockpit shot. A faint normal-blended wisp reads as a
+  // cloud; a smooth bright disc does not.
   const group = new THREE.Group();
   const puffs = [];
-  // The sun's direction, for keeping clouds out of its disc: a
-  // semi-transparent white sprite in front of the blown-out sun glow reads
-  // as a grey disc in the sky (v2's cover flaw).
   const sunDir = new THREE.Vector3(
     Math.cos(WORLD.sunElevation) * Math.cos(WORLD.sunAzimuth),
     Math.sin(WORLD.sunElevation),
     Math.cos(WORLD.sunElevation) * Math.sin(WORLD.sunAzimuth),
   ).normalize();
-  for (let i = 0; i < 26; i++) {
-    // Normal blending at low opacity, lumpy texture, wide sun-avoidance:
-    // additive clouds looked like glowing orbs and (with the plane in
-    // frame) threw a dark diagonal veil across the cockpit shot. A faint
-    // normal-blended wisp reads as a cloud; a smooth bright disc does not.
-    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.15 + rng() * 0.15, depthWrite: false });
-    const sprite = new THREE.Sprite(mat);
+  const puffGeo = new THREE.IcosahedronGeometry(1, 1);
+  // UNLIT white (Basic): the golden sun tinted Lambert puffs orange-beige
+  // and they read as floating potatoes (v5.1). Flat white lumps against
+  // the blue sky read as clouds in this low-poly style; the geometry
+  // silhouette still gives them shape. The horizon orange eggs were the
+  // same tinting on distant low puffs.
+  const puffMat = new THREE.MeshBasicMaterial({ color: 0xfff8f0, transparent: true, opacity: 0.95, fog: false });
+  for (let i = 0; i < 10; i++) {
+    const cloud = new THREE.Group();
     let a = rng() * Math.PI * 2;
     const r = 250 + rng() * 950;
-    const y = 150 + rng() * 110;
+    const y = 220 + rng() * 120;
     let dir = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
     // Wide cone: the staged cameras sit ~750 m from the origin, so the
     // origin-centric check has to clear far more than the sun's own disc —
@@ -193,12 +191,18 @@ function buildClouds(scene, rng) {
       a += 1.1;
       dir = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
     }
-    sprite.position.set(dir.x * r, y, dir.z * r);
-    const w = 100 + rng() * 140;
-    sprite.scale.set(w, w * 0.42, 1);
-    sprite.userData.drift = 1.5 + rng() * 2.5;
-    group.add(sprite);
-    puffs.push(sprite);
+    const n = 5 + Math.floor(rng() * 3);
+    for (let j = 0; j < n; j++) {
+      const puff = new THREE.Mesh(puffGeo, puffMat);
+      const pr = 18 + rng() * 22;
+      puff.position.set((rng() - 0.5) * 80, (rng() - 0.5) * 18, (rng() - 0.5) * 36);
+      puff.scale.set(pr, pr * 0.62, pr * 0.8);
+      cloud.add(puff);
+    }
+    cloud.position.set(dir.x * r, y, dir.z * r);
+    cloud.userData.drift = 1.5 + rng() * 2.5;
+    group.add(cloud);
+    puffs.push(cloud);
   }
   scene.add(group);
   return puffs;
@@ -401,7 +405,7 @@ export function buildWorld(scene, seed = 1) {
     Math.sin(WORLD.sunElevation),
     Math.cos(WORLD.sunElevation) * Math.sin(WORLD.sunAzimuth),
   ).normalize();
-  const sun = new THREE.DirectionalLight(0xffb066, 2.6);
+  const sun = new THREE.DirectionalLight(0xffb066, 2.9);
   sun.position.copy(sunDir).multiplyScalar(600);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
@@ -414,15 +418,16 @@ export function buildWorld(scene, seed = 1) {
   scene.add(sun);
   // Warm fill from the south-west so the plane's shadowed side (and the
   // front view on the runway) stays readable instead of going black.
-  const fill = new THREE.DirectionalLight(0xffd9b0, 0.9);
+  // Stronger in v5: the hero camera looks at the plane's shaded side.
+  const fill = new THREE.DirectionalLight(0xffd9b0, 1.15);
   fill.position.set(-350, 220, 550);
   scene.add(fill);
   // Cool rim from the south-east so the plane keeps an edge against the sky
   // and sea on its shadowed side instead of going flat.
-  const rim = new THREE.DirectionalLight(0xbfd4ff, 0.45);
+  const rim = new THREE.DirectionalLight(0xbfd4ff, 0.6);
   rim.position.set(350, 240, 650);
   scene.add(rim);
-  scene.add(new THREE.HemisphereLight(0x8fb0e0, 0x5a4a3a, 1.7));
+  scene.add(new THREE.HemisphereLight(0x8fb0e0, 0x5a4a3a, 1.8));
   scene.add(new THREE.AmbientLight(0x604a38, 0.8));
 
   const dome = buildSky(scene, rng);

@@ -23,11 +23,10 @@ export function stageShot(name, G) {
     G.flight.state.speed = 0;
     G.setState('menu');
     G.setCameraMode('orbit');
-    G.setOrbitAngle(0.79); // camera south-east of the plane, looking
-    // north-west: the view runs over open sea and the horizon, not into
-    // the dark eastern hillside (v3 looked north-east, the worst
-    // direction — sampled mean height 37 m, no sea). The plane's sunlit
-    // east side faces the camera as a front-right 3/4.
+    G.setOrbitAngle(0.79); // v4 staging RESTORED: the v5 front angle (2.35)
+    // hid the plane's nose behind the menu card and filled the frame with
+    // flat hillside. From the south-east the plane sits fully right of the
+    // card, palms + sky behind it. The v5 plane detail shows here too.
     G.setOrbitRadius(14);
     document.body.classList.add('shot-frame');
     G.hud.showMenu(0);
@@ -55,7 +54,9 @@ export function stageShot(name, G) {
     G.flight.state.throttle = 0.7;
     G.setElapsed(75);
     G.setState('flying');
-    G.setCameraMode('chase');
+    G.setCameraMode('hero'); // v5 front-left 3/4 on the sunlit side (see
+    // main.js updateHeroCamera): nose, prop, windows and cheatline all
+    // visible, plane big in frame, ring 2 still in the background.
     G.hud.hideMenu();
     return true;
   }
@@ -96,7 +97,7 @@ export function stageShot(name, G) {
     G.setElapsed(522);
     G.setState('results');
     G.setCameraMode('orbit');
-    G.setOrbitAngle(0.79); // same sea view as the menu shot (v4)
+    G.setOrbitAngle(0.79); // v4 staging restored (same card problem as menu)
     G.setOrbitRadius(13);
     document.body.classList.add('shot-frame');
     // Landed: no next ring to point at.

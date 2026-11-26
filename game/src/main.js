@@ -39,7 +39,7 @@ function main() {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.06;
+  renderer.toneMappingExposure = 1.1; // v5: a touch brighter for contrast
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 6000);
@@ -103,7 +103,10 @@ function main() {
       // slab. Chase view keeps the full prop + disc.
       plane.prop.visible = m !== 'cockpit';
       plane.bladeMat.opacity = m === 'cockpit' ? 0 : 1;
-      plane.discMat.opacity = m === 'cockpit' ? 0 : 0.04;
+      // Chase/hero disc reads as a spinning prop blur at 0.14 (was 0.04,
+      // nearly invisible in the cover). Cockpit stays 0 — the prop is
+      // hidden there entirely, the slab lesson from v2/v4.
+      plane.discMat.opacity = m === 'cockpit' ? 0 : 0.14;
     },
     setOrbitAngle(a) {
       orbitAngle = a;
@@ -116,6 +119,9 @@ function main() {
     },
     placeChaseCamera() {
       updateChaseCamera(1);
+    },
+    placeHeroCamera() {
+      updateHeroCamera();
     },
     placeCockpitCamera() {
       updateCockpitCamera();
@@ -178,6 +184,33 @@ function main() {
     camera.lookAt(look);
   }
 
+  // Hero camera (v5, staged cover shot only): front-left 3/4, on the
+  // SUNLIT side. The old chase view sat directly behind the plane, so the
+  // wing was a huge flat white slab hiding the fuselage — it read as a
+  // paper cutout. From here the nose, spinner, prop blur, cabin windows
+  // and cheatline are all visible, the plane is big in frame, and the next
+  // ring still sits in the background beyond it. Never used in live play.
+  function updateHeroCamera() {
+    const fwd = forwardVector(flight.state.yaw, flight.state.pitch);
+    const up = new THREE.Vector3(0, 1, 0);
+    const right = new THREE.Vector3().crossVectors(fwd, up).normalize();
+    const pos = flight.state.pos.clone()
+      .addScaledVector(fwd, 10)
+      .addScaledVector(right, -13)
+      .addScaledVector(up, 3);
+    camera.position.copy(pos);
+    // Look just ahead of the plane, not 16 m out: the look target sets
+    // the frame centre, and a far target pushes the plane itself off the
+    // frame edge (52° off-axis). The ring sits ~90° off this axis from
+    // a side camera, so it cannot share the frame with a big plane —
+    // the hero shot is the plane + coast, the HUD carries the ring info.
+    // v5.1 sat too close to the wing (5 m): the near wing filled the
+    // frame as a flat maroon slab. Pulled back + more to the front, so
+    // the wing reads as a wing and the nose + windows carry the shot.
+    const look = flight.state.pos.clone().addScaledVector(fwd, 6).addScaledVector(up, 2);
+    camera.lookAt(look);
+  }
+
   function updateCockpitCamera() {
     // Sit just behind the nose, above the cowl: the white nose + maroon
     // belly read at the bottom of the frame (v3 sat ahead of the wing and
@@ -211,7 +244,7 @@ function main() {
     staged = stageShot(params.name, api);
     if (staged) {
       frozen = true;
-      if (params.name === 'play') updateChaseCamera(1);
+      if (params.name === 'play') updateHeroCamera();
       if (params.name === 'cockpit') updateCockpitCamera();
       if (params.name === 'start' || params.name === 'end') updateOrbitCamera(0);
       hud.update(flight.state, course, elapsed, cameraMode, gameState);
@@ -302,6 +335,7 @@ function main() {
     // Cameras.
     if (gameState === 'menu' || gameState === 'results') updateOrbitCamera(frozen ? 0 : dt);
     else if (cameraMode === 'cockpit') updateCockpitCamera();
+    else if (cameraMode === 'hero') updateHeroCamera();
     else updateChaseCamera(frozen ? 1 : dt);
 
     world.update(dt, t, flight.state.pos);
