@@ -95,10 +95,12 @@ function main() {
       cameraMode = m;
       hud.setCockpit(m === 'cockpit');
       plane.canopy.visible = m !== 'cockpit';
-      // In the cockpit the prop is right in front of the camera: fade the
-      // blades to a blur and thin the disc out, or they read as black bars.
+      // In the cockpit the prop is right in front of the camera: hide the
+      // whole prop (disc + blades) — at 1 m it veils the view. The blades
+      // read as black bars; the disc as a grey slab.
+      plane.prop.visible = m !== 'cockpit';
       plane.bladeMat.opacity = m === 'cockpit' ? 0.22 : 1;
-      plane.discMat.opacity = m === 'cockpit' ? 0.07 : 0.16;
+      plane.discMat.opacity = m === 'cockpit' ? 0 : 0.04;
     },
     setOrbitAngle(a) {
       orbitAngle = a;
@@ -174,12 +176,13 @@ function main() {
   }
 
   function updateCockpitCamera() {
-    // Sit high above the canopy nose, looking over the nose and the spinning
-    // prop: the wing stays below the frame, the runway stays in frame, and
-    // the prop reads small instead of filling the screen.
+    // Sit just ahead of the high wing's leading edge, above the nose, looking
+    // over the nose and the spinning prop: the wing stays behind the camera
+    // (it would fill the frame from the old seat), the runway stays in frame,
+    // and the prop reads small instead of filling the screen.
     const fwd = forwardVector(flight.state.yaw, flight.state.pitch);
     const up = new THREE.Vector3(0, 1, 0);
-    const pos = flight.state.pos.clone().addScaledVector(up, 1.9).addScaledVector(fwd, 0.2);
+    const pos = flight.state.pos.clone().addScaledVector(up, 0.95).addScaledVector(fwd, 2.2);
     camera.position.copy(pos);
     const look = flight.state.pos.clone().addScaledVector(fwd, 120).addScaledVector(up, -5);
     // Roll the horizon with the plane: tilt the camera up vector.
@@ -193,8 +196,8 @@ function main() {
     const target = flight.state.pos.clone().add(new THREE.Vector3(0, 1.5, 0));
     camera.position.set(
       target.x + Math.sin(orbitAngle) * r,
-      target.y + r * 0.35,
-      target.z + Math.cos(orbitAngle) * r,
+      target.y + r * 0.35, // low enough that the horizon and sky stay in
+      target.z + Math.cos(orbitAngle) * r, // frame instead of only the slope
     );
     camera.lookAt(target);
   }

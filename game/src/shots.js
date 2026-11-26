@@ -23,31 +23,38 @@ export function stageShot(name, G) {
     G.flight.state.speed = 0;
     G.setState('menu');
     G.setCameraMode('orbit');
-    G.setOrbitAngle(0.15); // from the south, looking north: the plane's nose
-    // faces the camera, the town sits to the right, the runway runs away.
-    G.setOrbitRadius(16);
+    G.setOrbitAngle(-0.6); // from the south-west, looking north-east ALONG
+    // the runway: a front-left 3/4 view — nose, prop, canopy and the
+    // maroon belly face the camera, the runway runs away to the northern
+    // sea, the town climbs the eastern hillside and the sunset glows
+    // ahead. (Looking east into the hillside fills the frame with dark
+    // slope; looking along the strip opens it up.)
+    G.setOrbitRadius(14);
     document.body.classList.add('shot-frame');
     G.hud.showMenu(0);
     return true;
   }
   if (name === 'play') {
-    // Late course: ten rings banked through, diving at ring 11 toward the
-    // sunset — the plane flies almost straight into the low sun, with the
-    // sea and the islands behind the ring.
-    const ring = G.course.rings[10];
-    const prev = G.course.rings[9];
+    // Early course: one ring banked through, flying east-north-east at ring
+    // 2 — green coast and open sea below, the low sun ~30 degrees to the
+    // RIGHT of the flight path so it warms the frame edge and lights the
+    // plane without washing the ring out (v2 flew straight into the sun;
+    // the ring-3 leg flew over a brown rocky peak). Gentler bank (0.3) so
+    // the fuselage, windows and cheatline stay visible beside the wing.
+    const ring = G.course.rings[1];
+    const prev = G.course.rings[0];
     const dir = new THREE.Vector3().subVectors(ring.center, prev.center).normalize();
     const p = ring.center.clone().addScaledVector(dir, -70);
-    G.course.state.nextIndex = 10;
-    G.course.state.passedCount = 10;
-    G.course.state.score = 5000;
-    for (let i = 0; i < 10; i++) G.course.rings[i].passed = true;
+    G.course.state.nextIndex = 1;
+    G.course.state.passedCount = 1;
+    G.course.state.score = 500;
+    for (let i = 0; i < 1; i++) G.course.rings[i].passed = true;
     G.course.refreshLooks();
     G.flight.resetTo(p.x, p.y + 6, p.z, Math.atan2(dir.x, dir.z), 66);
-    G.flight.state.roll = 0.5;
+    G.flight.state.roll = 0.3;
     G.flight.state.pitch = -0.06;
     G.flight.state.throttle = 0.7;
-    G.setElapsed(480);
+    G.setElapsed(75);
     G.setState('flying');
     G.setCameraMode('chase');
     G.hud.hideMenu();
@@ -90,8 +97,8 @@ export function stageShot(name, G) {
     G.setElapsed(522);
     G.setState('results');
     G.setCameraMode('orbit');
-    G.setOrbitAngle(0.15);
-    G.setOrbitRadius(18);
+    G.setOrbitAngle(-0.6);
+    G.setOrbitRadius(13);
     document.body.classList.add('shot-frame');
     // Landed: no next ring to point at.
     document.getElementById('chevron').style.display = 'none';

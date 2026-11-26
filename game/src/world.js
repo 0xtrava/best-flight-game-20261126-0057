@@ -51,13 +51,16 @@ function buildSky(scene, rng) {
   const dome = new THREE.Mesh(geo, mat);
   scene.add(dome);
 
-  // The sun itself: a bright disc low on the horizon.
+  // The sun itself: a bright disc low on the horizon. Kept hidden — the
+  // shader glow already draws the sun, and the disc read as a pale oval
+  // floating in the glow on the cover shot (v3).
   const sunGeo = new THREE.CircleGeometry(90, 32);
   const sunMat = new THREE.MeshBasicMaterial({ color: 0xffd9a0, fog: false, transparent: true, opacity: 0.95 });
   const sun = new THREE.Mesh(sunGeo, sunMat);
   const d = mat.uniforms.sunDir.value;
   sun.position.copy(d).multiplyScalar(2400);
   sun.lookAt(0, 0, 0);
+  sun.visible = false;
   scene.add(sun);
   return dome;
 }
@@ -139,23 +142,52 @@ function buildSea(scene) {
 }
 
 function buildClouds(scene, rng) {
+  // A lumpy cluster of puffs, not one smooth disc: a single radial
+  // gradient reads as a grey oval against the sun glow (v2/v3 cover flaw).
   const tex = canvasTexture(128, (g, s) => {
-    const grad = g.createRadialGradient(s / 2, s / 2, 4, s / 2, s / 2, s / 2);
-    grad.addColorStop(0, 'rgba(255, 244, 230, 0.9)');
-    grad.addColorStop(0.55, 'rgba(255, 236, 220, 0.45)');
-    grad.addColorStop(1, 'rgba(255, 236, 220, 0)');
-    g.fillStyle = grad;
-    g.fillRect(0, 0, s, s);
+    const puff = (cx, cy, r, a) => {
+      const grad = g.createRadialGradient(cx, cy, 2, cx, cy, r);
+      grad.addColorStop(0, `rgba(255, 244, 230, ${a})`);
+      grad.addColorStop(0.6, `rgba(255, 236, 220, ${a * 0.5})`);
+      grad.addColorStop(1, 'rgba(255, 236, 220, 0)');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, s, s);
+    };
+    puff(s * 0.5, s * 0.55, s * 0.34, 0.9);
+    puff(s * 0.3, s * 0.62, s * 0.22, 0.7);
+    puff(s * 0.72, s * 0.6, s * 0.24, 0.7);
+    puff(s * 0.55, s * 0.4, s * 0.2, 0.6);
   });
   const group = new THREE.Group();
   const puffs = [];
+  // The sun's direction, for keeping clouds out of its disc: a
+  // semi-transparent white sprite in front of the blown-out sun glow reads
+  // as a grey disc in the sky (v2's cover flaw).
+  const sunDir = new THREE.Vector3(
+    Math.cos(WORLD.sunElevation) * Math.cos(WORLD.sunAzimuth),
+    Math.sin(WORLD.sunElevation),
+    Math.cos(WORLD.sunElevation) * Math.sin(WORLD.sunAzimuth),
+  ).normalize();
   for (let i = 0; i < 26; i++) {
-    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.5 + rng() * 0.35, depthWrite: false });
+    // Normal blending at low opacity, lumpy texture, wide sun-avoidance:
+    // additive clouds looked like glowing orbs and (with the plane in
+    // frame) threw a dark diagonal veil across the cockpit shot. A faint
+    // normal-blended wisp reads as a cloud; a smooth bright disc does not.
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.15 + rng() * 0.15, depthWrite: false });
     const sprite = new THREE.Sprite(mat);
-    const a = rng() * Math.PI * 2;
+    let a = rng() * Math.PI * 2;
     const r = 250 + rng() * 950;
-    sprite.position.set(Math.cos(a) * r, 130 + rng() * 110, Math.sin(a) * r);
-    const w = 140 + rng() * 220;
+    const y = 150 + rng() * 110;
+    let dir = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+    // Wide cone: the staged cameras sit ~750 m from the origin, so the
+    // origin-centric check has to clear far more than the sun's own disc —
+    // any cloud in the north-east sky can land in the glow from a camera.
+    if (dir.dot(sunDir) > 0.5) {
+      a += 1.1;
+      dir = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+    }
+    sprite.position.set(dir.x * r, y, dir.z * r);
+    const w = 100 + rng() * 140;
     sprite.scale.set(w, w * 0.42, 1);
     sprite.userData.drift = 1.5 + rng() * 2.5;
     group.add(sprite);
@@ -170,7 +202,7 @@ function buildRunway(scene) {
   const y = RUNWAY.altitude + 0.15;
   const strip = new THREE.Mesh(
     new THREE.PlaneGeometry(RUNWAY.width, RUNWAY.length),
-    new THREE.MeshLambertMaterial({ color: 0x2e3138 }),
+    new THREE.MeshLambertMaterial({ color: 0x565a63 }),
   );
   strip.rotation.x = -Math.PI / 2;
   strip.rotation.z = RUNWAY.heading;
@@ -370,11 +402,16 @@ export function buildWorld(scene, seed = 1) {
   scene.add(sun);
   // Warm fill from the south-west so the plane's shadowed side (and the
   // front view on the runway) stays readable instead of going black.
-  const fill = new THREE.DirectionalLight(0xffd9b0, 0.7);
+  const fill = new THREE.DirectionalLight(0xffd9b0, 0.9);
   fill.position.set(-350, 220, 550);
   scene.add(fill);
-  scene.add(new THREE.HemisphereLight(0x8fb0e0, 0x5a4a3a, 1.15));
-  scene.add(new THREE.AmbientLight(0x604a38, 0.55));
+  // Cool rim from the south-east so the plane keeps an edge against the sky
+  // and sea on its shadowed side instead of going flat.
+  const rim = new THREE.DirectionalLight(0xbfd4ff, 0.45);
+  rim.position.set(350, 240, 650);
+  scene.add(rim);
+  scene.add(new THREE.HemisphereLight(0x8fb0e0, 0x5a4a3a, 1.5));
+  scene.add(new THREE.AmbientLight(0x604a38, 0.7));
 
   const dome = buildSky(scene, rng);
   const terrain = buildTerrain(scene);

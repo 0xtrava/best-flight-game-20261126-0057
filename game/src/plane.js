@@ -4,132 +4,171 @@
 import * as THREE from 'three';
 import { PLANE, RUNWAY, terrainHeight, clamp } from './config.js';
 
-const CREAM = 0xf3e9d2;
-const TEAL = 0x1f7a6d;
-const ORANGE = 0xe86a1f;
-const DARK = 0x2b2f36;
+// Cessna 172-style high-wing, built to match the user's reference photo
+// literally: white upper fuselage, maroon belly + cheatline, grey tail.
+const WHITE = 0xf5f2ea;
+const MAROON = 0x8e2f2a;
+const GREY = 0x8a8f94;
+const DARK = 0x16181c;
 
 export function buildPlaneModel() {
   const group = new THREE.Group();
-  const cream = new THREE.MeshPhongMaterial({ color: CREAM, shininess: 60, specular: 0x8a6a44 });
-  const teal = new THREE.MeshPhongMaterial({ color: TEAL, shininess: 50, specular: 0x2a4a3a });
-  const orange = new THREE.MeshPhongMaterial({ color: ORANGE, shininess: 70, specular: 0x993311 });
+  const white = new THREE.MeshPhongMaterial({ color: WHITE, shininess: 80, specular: 0x9a8a70 });
+  const maroon = new THREE.MeshPhongMaterial({ color: MAROON, shininess: 70, specular: 0x662222 });
+  const grey = new THREE.MeshPhongMaterial({ color: GREY, shininess: 40, specular: 0x555555 });
   const dark = new THREE.MeshPhongMaterial({ color: DARK, shininess: 30 });
   // The prop blades and disc fade to a blur in the cockpit view (see main.js).
   const bladeMat = new THREE.MeshPhongMaterial({ color: DARK, shininess: 30, transparent: true, opacity: 1 });
-  const discMat = new THREE.MeshBasicMaterial({ color: 0xd8d8d8, transparent: true, opacity: 0.16, side: THREE.DoubleSide });
-  const glass = new THREE.MeshPhongMaterial({ color: 0x9fd8e8, shininess: 140, transparent: true, opacity: 0.85 });
+  const discMat = new THREE.MeshBasicMaterial({ color: 0xd8d8d8, transparent: true, opacity: 0.04, side: THREE.DoubleSide });
+  const glass = new THREE.MeshPhongMaterial({ color: 0x18242e, shininess: 180, transparent: true, opacity: 0.92 });
 
-  // Fuselage: a tapered cylinder along Z (nose at -Z), cream on top.
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.5, 5.2, 14), cream);
+  // Fuselage: long tapered cylinder along Z (nose at -Z), fat at the nose.
+  // CylinderGeometry's radiusTop lands at +Z after the X-rotation, so the
+  // small radius goes first: thin tail, fat nose.
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.40, 0.62, 5.4, 16), white);
   body.rotation.x = Math.PI / 2;
   body.castShadow = true;
   group.add(body);
-  // Rounded orange nose cowl.
-  const cowl = new THREE.Mesh(new THREE.SphereGeometry(0.88, 14, 10), orange);
-  cowl.scale.set(1, 1, 1.15);
+  // Maroon belly: a half-shell wrapped around the lower fuselage, so the
+  // two-tone split reads from the side exactly like the reference photo.
+  // (Local -Z maps to world -Y after the X-rotation, so theta in
+  // [-PI/2, PI/2] is the bottom half.)
+  const bellyMat = new THREE.MeshPhongMaterial({ color: MAROON, shininess: 70, specular: 0x662222, side: THREE.DoubleSide });
+  const belly = new THREE.Mesh(new THREE.CylinderGeometry(0.41, 0.63, 5.0, 16, 1, true, -Math.PI / 2, Math.PI), bellyMat);
+  belly.rotation.x = Math.PI / 2;
+  belly.position.z = 0.1;
+  group.add(belly);
+  // Rounded white nose cowl.
+  const cowl = new THREE.Mesh(new THREE.SphereGeometry(0.64, 16, 12), white);
+  cowl.scale.set(1, 0.85, 1.15);
   cowl.position.z = -2.55;
   cowl.castShadow = true;
   group.add(cowl);
-  // Teal belly keel so the plane reads from below as well.
-  const keel = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.3, 3.6), teal);
-  keel.position.set(0, -0.72, 0.4);
-  group.add(keel);
-  // Orange cheatline stripe along the fuselage.
-  const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.24, 4.4), orange);
-  stripe.position.set(0, 0.05, 0.2);
-  group.add(stripe);
-  // Canopy: a bigger glass bubble, with a cream fairing behind it.
-  const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.78, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), glass);
-  canopy.scale.set(1, 0.8, 1.6);
-  canopy.position.set(0, 0.5, -0.9);
-  group.add(canopy);
-  const fairing = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.5, 0.9), cream);
-  fairing.position.set(0, 0.62, 0.45);
-  group.add(fairing);
-  // Main wings: two cream halves with a slight dihedral, teal trailing-edge
-  // stripe, orange tips with rounded caps — bright on top so the plane pops
-  // against green land and blue sea from the chase camera.
+  // Maroon cheatline stripe along each fuselage side at window level: thin
+  // shell bands that hug the taper (a straight box would ridge at the tail).
+  // Band covers world y in [-0.08, +0.28]; theta ranges pick out the sides.
+  for (const thetaStart of [1.41, 4.11]) {
+    const stripe = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.45, 0.57, 3.0, 16, 1, true, thetaStart, 0.76),
+      bellyMat,
+    );
+    stripe.rotation.x = Math.PI / 2;
+    stripe.position.z = 0.2;
+    group.add(stripe);
+  }
+  // Cabin: the boxy Cessna cabin with big dark windows, sitting above the
+  // fuselage line under the high wing.
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.12, 0.8, 1.7), white);
+  cabin.position.set(0, 0.42, -0.35);
+  cabin.castShadow = true;
+  group.add(cabin);
+  const cabinRoof = new THREE.Mesh(new THREE.BoxGeometry(1.14, 0.08, 1.7), white);
+  cabinRoof.position.set(0, 0.86, -0.35);
+  group.add(cabinRoof);
+  // Big dark side windows — the Cessna signature.
   for (const side of [-1, 1]) {
-    const half = new THREE.Mesh(new THREE.BoxGeometry(5.75, 0.2, 1.9), cream);
-    half.position.set(side * 2.9, 0.28, 0.3);
-    half.rotation.z = side * 0.09;
+    const win = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.5, 1.1), glass);
+    win.position.set(side * 0.58, 0.5, -0.35);
+    group.add(win);
+  }
+  // Windshield: sloped dark glass at the front of the cabin (bottom forward,
+  // top raked back toward the roof). Hidden in the cockpit view (main.js
+  // toggles canopy.visible), so the pilot sees out.
+  const canopy = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.55, 0.06), glass);
+  canopy.position.set(0, 0.55, -1.18);
+  canopy.rotation.x = 0.45;
+  group.add(canopy);
+  // High wing: ONE straight wing on top of the cabin (Cessna style), slight
+  // dihedral, white with maroon tips — the single most recognisable part of
+  // the reference plane. Two halves so the dihedral reads cleanly.
+  for (const side of [-1, 1]) {
+    const half = new THREE.Mesh(new THREE.BoxGeometry(5.7, 0.2, 1.9), white);
+    half.position.set(side * 2.85, 1.02, -0.3);
+    half.rotation.z = side * 0.06;
     half.castShadow = true;
     group.add(half);
-    const edge = new THREE.Mesh(new THREE.BoxGeometry(5.75, 0.22, 0.45), teal);
-    edge.position.set(side * 2.9, 0.28, 1.02);
-    edge.rotation.z = side * 0.09;
-    group.add(edge);
-    const tip = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.22, 1.9), orange);
-    tip.position.set(side * 5.3, 0.76, 0.3);
-    tip.rotation.z = side * 0.09;
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.22, 1.9), maroon);
+    tip.position.set(side * 5.35, 1.17, -0.3);
+    tip.rotation.z = side * 0.06;
     group.add(tip);
     // Rounded wingtip: a half-disc cap at the outer edge.
     const cap = new THREE.Mesh(
       new THREE.CylinderGeometry(0.95, 0.95, 0.22, 14, 1, false, side > 0 ? 0 : Math.PI, Math.PI),
-      orange,
+      maroon,
     );
-    cap.position.set(side * 5.85, 0.8, 0.3);
-    cap.rotation.z = side * 0.09;
+    cap.position.set(side * 5.85, 1.2, -0.3);
+    cap.rotation.z = side * 0.06;
     group.add(cap);
+    // Wing strut: the diagonal brace from the lower fuselage to the wing —
+    // the Cessna signature. Lower end on the fuselage side, upper end under
+    // the wing at about 40% span.
+    const strutLen = Math.hypot(1.75, 1.25);
+    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, strutLen, 6), white);
+    strut.position.set(side * 1.32, 0.28, -0.3);
+    strut.rotation.z = -side * Math.atan2(1.75, 1.25);
+    group.add(strut);
   }
-  // Tail: cream stabilizer with orange tips, teal fin with an orange rudder.
-  const tail = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.16, 1.1), cream);
-  tail.position.set(0, 0.18, 2.4);
+  // Tail: grey like the photo — a swept vertical fin with a dorsal extension
+  // and a grey horizontal stabilizer with maroon tips.
+  const fin = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.5, 1.3), grey);
+  fin.position.set(0, 0.85, 2.55);
+  fin.rotation.x = -0.18;
+  group.add(fin);
+  const dorsal = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.5, 1.2), grey);
+  dorsal.position.set(0, 0.42, 1.85);
+  dorsal.rotation.x = -0.18;
+  group.add(dorsal);
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.14, 1.0), grey);
+  tail.position.set(0, 0.32, 2.55);
   group.add(tail);
   for (const side of [-1, 1]) {
-    const tailTip = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.18, 1.1), orange);
-    tailTip.position.set(side * 1.65, 0.18, 2.4);
+    const tailTip = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.16, 1.0), maroon);
+    tailTip.position.set(side * 1.5, 0.32, 2.55);
     group.add(tailTip);
   }
-  const fin = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.6, 1.5), teal);
-  fin.position.set(0, 0.85, 2.4);
-  group.add(fin);
-  const rudder = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.2, 0.45), orange);
-  rudder.position.set(0, 0.8, 3.05);
-  group.add(rudder);
-  // Propeller: orange spinner + three blades + a translucent spin disc so
-  // the prop reads as a blur in flight and as a disc in the cockpit view.
+  // Propeller: dark spinner + TWO black blades (like the photo) + a
+  // translucent spin disc so the prop reads as a blur in flight.
   const prop = new THREE.Group();
-  const hub = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.8, 10), orange);
+  const hub = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.55, 10), dark);
   hub.rotation.x = -Math.PI / 2;
   prop.add(hub);
-  for (let i = 0; i < 3; i++) {
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.34, 3.4, 0.08), bladeMat);
-    blade.rotation.z = (i * Math.PI * 2) / 3;
+  for (let i = 0; i < 2; i++) {
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.30, 3.4, 0.07), bladeMat);
+    blade.rotation.z = i * Math.PI;
     prop.add(blade);
   }
-  const disc = new THREE.Mesh(new THREE.CircleGeometry(1.8, 28), discMat);
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(1.75, 28), discMat);
   disc.position.z = -0.05;
   prop.add(disc);
-  prop.position.z = -4.25;
+  prop.position.z = -3.35;
   group.add(prop);
-  // Landing gear: two wheels on struts.
-  for (const side of [-1, 1]) {
-    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1.1, 6), dark);
-    strut.position.set(side * 0.85, -0.9, -0.4);
+  // Landing gear: fixed TRICYCLE gear like the photo — nose wheel plus two
+  // mains, each with a white wheel fairing (spat) the tyre peeks out of.
+  const gearLeg = (x, z, wheelY) => {
+    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.95, 6), dark);
+    strut.position.set(x, -0.95, z);
     group.add(strut);
-    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.3, 12), dark);
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.26, 12), dark);
     wheel.rotation.z = Math.PI / 2;
-    wheel.position.set(side * 0.85, -1.45, -0.4);
+    wheel.position.set(x, wheelY, z);
     group.add(wheel);
-  }
-  // Wing struts: thin braces from the lower fuselage to each wing.
-  for (const side of [-1, 1]) {
-    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 2.1, 6), dark);
-    strut.position.set(side * 1.45, -0.28, 0.3);
-    strut.rotation.z = -side * 1.15;
-    group.add(strut);
-  }
+    const spat = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 10), white);
+    spat.scale.set(0.8, 1.15, 1.5);
+    spat.position.set(x, wheelY + 0.28, z);
+    group.add(spat);
+  };
+  gearLeg(0, -1.9, -1.38);
+  gearLeg(-0.8, 0.35, -1.42);
+  gearLeg(0.8, 0.35, -1.42);
   // Navigation lights: red left, green right, white tail.
   const light = (color, x, y, z) => {
     const m = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshBasicMaterial({ color }));
     m.position.set(x, y, z);
     group.add(m);
   };
-  light(0xff2a2a, -5.8, -0.15, 0.3);
-  light(0x2aff66, 5.8, -0.15, 0.3);
-  light(0xffffff, 0, 0.2, 2.9);
+  light(0xff2a2a, -5.85, 1.18, -0.3);
+  light(0x2aff66, 5.85, 1.18, -0.3);
+  light(0xffffff, 0, 0.35, 2.95);
 
   group.traverse((o) => {
     if (o.isMesh) o.castShadow = true;

@@ -5,7 +5,7 @@ export const WORLD = {
   size: 2400, // world spans -1200..1200 in x and z
   seaLevel: 0,
   sunAzimuth: -0.9, // golden-hour sun, low in the west
-  sunElevation: 0.16,
+  sunElevation: 0.2,
   fogNear: 260,
   fogFar: 1500,
 };
