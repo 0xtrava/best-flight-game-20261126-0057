@@ -11,6 +11,13 @@
 // material and `discMat` the nozzle glow disc (both hidden in cockpit mode,
 // exactly like the old prop). buildJetModel(opts) is the shared builder:
 // the player jet (full detail) and the enemy jets (dark, no gear/missiles).
+//
+// v9: user rejected the v8 jet ("jetnya jelek") — the twin black box fins
+// read as sails and the canopy as a black blob on a grey tube. Full F-16
+// rebuild: flattened elliptical fuselage (wider than tall), longer sharper
+// nose, frameless blue-grey bubble canopy on a sill, SINGLE swept grey tail
+// fin, ventral fins, LERX strakes, cropped-delta wings a touch darker than
+// the body, and ONE chin intake under the nose.
 
 import * as THREE from 'three';
 import { PLANE, RUNWAY, terrainHeight, clamp } from './config.js';
@@ -18,6 +25,10 @@ import { PLANE, RUNWAY, terrainHeight, clamp } from './config.js';
 const GREY_TOP = 0x9aa2ab; // light grey camo, upper fuselage + wings
 const GREY_BELLY = 0x5d646d; // darker grey belly + radome
 const GREY_DARK = 0x3a4048; // enemy jets, fins, intakes
+const GREY_WING = 0x878e97; // wings a touch darker than the body, so the
+// wing reads as a wing against the fuselage in the hero shot (v8's pale
+// wings washed out into the sky).
+const GREY_SPINE = 0x7e858e; // dorsal spine strip, panel variation
 const DARK = 0x16181c;
 
 function sweptWing(span, rootLead, rootTrail, tipLead, tipTrail, thick, material) {
@@ -44,27 +55,28 @@ export function buildJetModel(opts = {}) {
   const group = new THREE.Group();
   const top = new THREE.MeshPhongMaterial({ color: dark ? GREY_DARK : GREY_TOP, shininess: 90, specular: 0x777777, side: THREE.DoubleSide });
   const belly = new THREE.MeshPhongMaterial({ color: dark ? 0x2c3138 : GREY_BELLY, shininess: 60, specular: 0x444444, side: THREE.DoubleSide });
-  const finMat = new THREE.MeshPhongMaterial({ color: dark ? 0x2c3138 : GREY_DARK, shininess: 50, side: THREE.DoubleSide });
-  const glass = new THREE.MeshPhongMaterial({ color: 0x101c26, shininess: 220, transparent: true, opacity: 0.95, side: THREE.DoubleSide });
+  const glass = new THREE.MeshPhongMaterial({ color: 0x22303e, shininess: 220, transparent: true, opacity: 0.92, side: THREE.DoubleSide });
   const metal = new THREE.MeshPhongMaterial({ color: 0x2a2e33, shininess: 120, specular: 0x888888 });
 
-  // Fuselage: a LATHE profile, jet-shaped — pointed nose, fat mid-body,
-  // tapering tail. Same technique as the v6 Cessna (which finally stopped
-  // reading as a tube), but the stations are a fighter's: narrow radome,
-  // wide centre, thin tail. Nose at -Z, tail at +Z.
+  // Fuselage: a LATHE profile, jet-shaped — long pointed nose, fat
+  // mid-body, tapering tail. v9 (user: "jetnya jelek"): the v8 lathe read
+  // as a grey tube, so the body is now FLATTENED (elliptical cross-section,
+  // wider than tall — a fighter fuselage, not a pipe) and the nose is
+  // longer and sharper, F-16 style. Nose at -Z, tail at +Z.
   const PROFILE = [
-    [0.02, -3.60], // nose tip
-    [0.18, -3.30],
-    [0.34, -2.90], // radome
-    [0.48, -2.40],
-    [0.56, -1.80], // intakes
-    [0.62, -1.00], // mid-body
-    [0.62, -0.20],
-    [0.58, 0.60],
-    [0.50, 1.40],
-    [0.42, 2.10],
-    [0.34, 2.70], // tail
-    [0.30, 2.95], // nozzle base
+    [0.02, -4.00], // nose tip
+    [0.14, -3.70],
+    [0.28, -3.30], // radome
+    [0.40, -2.80],
+    [0.50, -2.20], // chin intake
+    [0.58, -1.40],
+    [0.63, -0.60], // widest mid-body
+    [0.63, 0.20],
+    [0.60, 1.00],
+    [0.52, 1.80],
+    [0.44, 2.40],
+    [0.36, 2.90], // tail
+    [0.32, 3.10], // nozzle base
   ];
   const profilePoints = (zMin, zMax, extra = 0) =>
     PROFILE.filter(([, z]) => z >= zMin && z <= zMax)
@@ -75,69 +87,92 @@ export function buildJetModel(opts = {}) {
       material,
     );
     m.rotation.x = Math.PI / 2;
+    m.scale.set(1, 1, 0.82); // flatten: local Z is world vertical after
+    // the rotation, so the body is wider than it is tall
     m.castShadow = true;
     group.add(m);
     return m;
   };
   // Light-grey body, full profile, full circle.
-  lathe(-3.60, 2.95, 0, 0, Math.PI * 2, top);
+  lathe(-4.00, 3.10, 0, 0, Math.PI * 2, top);
   // Darker belly: half-shell around the lower fuselage (camouflage split).
-  lathe(-3.60, 2.95, 0.012, -Math.PI / 2, Math.PI, belly);
+  lathe(-4.00, 3.10, 0.012, -Math.PI / 2, Math.PI, belly);
   // Dark radome: the pointed nose cone section.
-  lathe(-3.60, -2.40, 0.014, 0, Math.PI * 2, belly);
+  lathe(-4.00, -2.80, 0.014, 0, Math.PI * 2, belly);
+  // Dorsal spine: a narrow darker strip along the top centreline, following
+  // the profile — panel variation so the body is not one flat grey slab.
+  // (Lathe phi PI is the top: phi 0 is local +Z, which the rotation maps
+  // to world down, so the belly half-shell is phi -PI/2..PI/2.)
+  lathe(-0.60, 2.80, 0.016, Math.PI - 0.28, 0.56, new THREE.MeshPhongMaterial({ color: GREY_SPINE, shininess: 60, side: THREE.DoubleSide }));
 
-  // Canopy: dark glass bubble on top, forward of mid-body. Hidden in the
-  // cockpit view (main.js toggles canopy.visible), so the pilot sees out.
+  // Canopy: a frameless bubble (F-16 style — no bow frame at all), dark
+  // blue-grey glass, long and low so it reads as glass, not a black blob.
+  // It sits IN the body on a grey sill instead of perched on top of it.
   const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.5, 18, 12), glass);
-  canopy.scale.set(0.72, 0.62, 2.1);
-  canopy.position.set(0, 0.52, -1.15);
+  canopy.scale.set(0.62, 0.42, 2.3);
+  canopy.position.set(0, 0.52, -1.45);
   canopy.castShadow = true;
   group.add(canopy);
-  // Canopy frame: a thin dark rim under the bubble so it sits on the body.
-  const frame = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.05, 6, 18), metal);
-  frame.scale.set(1, 1, 2.4);
-  frame.rotation.x = Math.PI / 2;
-  frame.position.set(0, 0.42, -1.15);
-  group.add(frame);
+  // Sill: a thin grey fairing under the bubble so the glass meets the body.
+  const sill = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.09, 2.1), top);
+  sill.position.set(0, 0.42, -1.45);
+  group.add(sill);
 
-  // Swept low wings: one extruded planform per side, slight anhedral.
-  // Root chord 2.2 (z -0.9..+1.3), tip chord 0.9, swept back ~35°.
+  // Cropped-delta wings, F-16 style: bigger, more swept, slightly darker
+  // than the body. Root chord 2.6 (z -1.1..+1.5), tip chord 0.9.
+  const wingMat = new THREE.MeshPhongMaterial({ color: dark ? GREY_DARK : GREY_WING, shininess: 90, specular: 0x777777, side: THREE.DoubleSide });
   for (const side of [-1, 1]) {
-    const wing = sweptWing(3.1, -0.9, 1.3, 0.2, 1.1, 0.12, top);
+    const wing = sweptWing(3.4, -1.1, 1.5, 0.7, 1.3, 0.12, wingMat);
     wing.scale.x = side;
     wing.position.set(0, -0.18, 0);
     wing.rotation.z = side * -0.04;
     group.add(wing);
+    // LERX: leading-edge root extension — a thin swept strake blending the
+    // intake into the wing root. The F-16's signature silhouette cue.
+    const lerx = sweptWing(1.5, -1.9, -0.7, -1.0, -0.25, 0.07, wingMat);
+    lerx.scale.x = side;
+    lerx.position.set(0, 0.06, 0);
+    group.add(lerx);
     // Wingtip missile rail (player only, cosmetic on the enemy too if asked).
     const rail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 1.0), metal);
-    rail.position.set(side * 3.05, -0.16, 0.6);
+    rail.position.set(side * 3.35, -0.16, 0.8);
     group.add(rail);
   }
-  // Tailplanes: smaller swept surfaces at the rear, slight anhedral.
+  // Tailplanes: all-moving stabilators, swept, slightly larger than v8.
   for (const side of [-1, 1]) {
-    const stab = sweptWing(1.5, 1.7, 3.0, 2.3, 2.9, 0.1, top);
+    const stab = sweptWing(1.6, 1.6, 3.05, 2.3, 2.95, 0.1, top);
     stab.scale.x = side;
-    stab.position.set(0, 0.08, 0);
+    stab.position.set(0, 0.1, 0);
     stab.rotation.z = side * -0.06;
     group.add(stab);
   }
-  // Twin tail fins, canted outward ~12°, swept back. v8.1: smaller and
-  // lighter — at full size (1.15 tall) in dark grey they read as giant
-  // black sails dominating the silhouette in the hero shot.
+  // SINGLE swept vertical tail fin, F-16 style — GREY, same as the body,
+  // never a big black rectangle. v8's twin black boxes read as sails and
+  // were the single ugliest part of the jet. One fin, swept back, standing
+  // on the tail. (Built from the same extruded planform as the wings,
+  // rotated up: span X becomes vertical Y.)
+  const finMat = new THREE.MeshPhongMaterial({ color: dark ? GREY_DARK : GREY_TOP, shininess: 80, specular: 0x666666, side: THREE.DoubleSide });
+  const fin = sweptWing(1.25, 1.55, 3.15, 2.35, 3.15, 0.09, finMat);
+  fin.rotation.z = Math.PI / 2;
+  fin.position.set(0, 0.12, 0);
+  fin.castShadow = true;
+  group.add(fin);
+  // Ventral fins: two small swept strakes under the tail (F-16 has them).
   for (const side of [-1, 1]) {
-    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.9, 0.85), new THREE.MeshPhongMaterial({ color: 0x4a5158, shininess: 50, side: THREE.DoubleSide }));
-    fin.position.set(side * 0.4, 0.72, 2.35);
-    fin.rotation.x = -0.35; // sweep back
-    fin.rotation.z = -side * 0.2; // cant outward
-    fin.castShadow = true;
-    group.add(fin);
+    const vf = sweptWing(0.55, 2.3, 3.05, 2.6, 3.05, 0.07, finMat);
+    vf.rotation.z = -Math.PI / 2;
+    vf.position.set(side * 0.28, -0.12, 0);
+    group.add(vf);
   }
-  // Side intakes: dark rectangular scoops under the fuselage, forward.
-  for (const side of [-1, 1]) {
-    const intake = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.42, 1.1), finMat);
-    intake.position.set(side * 0.55, -0.28, -1.35);
-    group.add(intake);
-  }
+  // SINGLE chin intake under the nose (F-16 style) — one dark ventral
+  // scoop, not two boxy side intakes. Plus a black intake mouth facing
+  // forward. This is the other big silhouette cue: one engine, one intake.
+  const intake = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.34, 1.35), metal);
+  intake.position.set(0, -0.42, -1.85);
+  group.add(intake);
+  const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.26, 0.1), new THREE.MeshPhongMaterial({ color: 0x14161a }));
+  mouth.position.set(0, -0.42, -2.52);
+  group.add(mouth);
 
   // Missiles under the wings (player only): white-grey body, dark nose,
   // tiny tail fins, on a pylon.
@@ -170,7 +205,7 @@ export function buildJetModel(opts = {}) {
   const afterburner = new THREE.Group();
   const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.38, 0.5, 16), metal);
   nozzle.rotation.x = Math.PI / 2;
-  nozzle.position.z = 3.05;
+  nozzle.position.z = 3.2;
   afterburner.add(nozzle);
   const flameMat = new THREE.MeshBasicMaterial({
     color: 0xff7711, transparent: true, opacity: 0.95,
@@ -180,24 +215,24 @@ export function buildJetModel(opts = {}) {
   // pale paper triangle in the hero shot, washed out against the sky.
   const flame = new THREE.Mesh(new THREE.ConeGeometry(0.4, 1.8, 12), flameMat);
   flame.rotation.x = Math.PI / 2; // tip points +Z (backward)
-  flame.position.z = 3.95;
+  flame.position.z = 4.1;
   afterburner.add(flame);
   const core = new THREE.Mesh(
     new THREE.ConeGeometry(0.2, 1.1, 10),
     new THREE.MeshBasicMaterial({ color: 0xffdd55, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }),
   );
   core.rotation.x = Math.PI / 2;
-  core.position.z = 3.6;
+  core.position.z = 3.75;
   afterburner.add(core);
   const glowMat = new THREE.MeshBasicMaterial({
     color: 0xff9922, transparent: true, opacity: 0.75,
     blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
   });
   const glow = new THREE.Mesh(new THREE.CircleGeometry(0.34, 16), glowMat);
-  glow.position.z = 3.32;
+  glow.position.z = 3.47;
   afterburner.add(glow);
   const light = new THREE.PointLight(0xff7733, 3, 45, 2);
-  light.position.set(0, 0, 3.6);
+  light.position.set(0, 0, 3.75);
   afterburner.add(light);
   group.add(afterburner);
 
@@ -222,7 +257,7 @@ export function buildJetModel(opts = {}) {
       hub.position.set(x, -1.45, z);
       gear.add(hub);
     };
-    gearLeg(0, -1.9);
+    gearLeg(0, -1.05); // nose gear sits just behind the chin intake
     gearLeg(-0.75, 0.5);
     gearLeg(0.75, 0.5);
   }
@@ -233,9 +268,9 @@ export function buildJetModel(opts = {}) {
     m.position.set(x, y, z);
     group.add(m);
   };
-  lightDot(0xff2a2a, -3.1, -0.14, 0.6);
-  lightDot(0x2aff66, 3.1, -0.14, 0.6);
-  lightDot(0xffffff, 0, 0.35, 2.95);
+  lightDot(0xff2a2a, -3.4, -0.14, 0.8);
+  lightDot(0x2aff66, 3.4, -0.14, 0.8);
+  lightDot(0xffffff, 0, 0.35, 3.1);
 
   group.traverse((o) => {
     if (o.isMesh) o.castShadow = true;

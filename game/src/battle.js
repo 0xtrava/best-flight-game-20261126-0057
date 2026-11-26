@@ -28,10 +28,10 @@ export function createBattle(scene, onEvent = () => {}) {
   // a circle around a course point at altitude, banking into the turn.
   const enemies = [];
   const enemyCenters = [
-    { ring: 2, alt: 130, radius: 160, speed: 0.10 },
-    { ring: 5, alt: 100, radius: 140, speed: -0.12 },
-    { ring: 8, alt: 150, radius: 180, speed: 0.09 },
-    { ring: 11, alt: 110, radius: 130, speed: -0.11 },
+    { ring: 2, alt: 130, radius: 160, speed: 0.055 },
+    { ring: 5, alt: 100, radius: 140, speed: -0.065 },
+    { ring: 8, alt: 150, radius: 180, speed: 0.05 },
+    { ring: 11, alt: 110, radius: 130, speed: -0.06 },
   ];
   for (let i = 0; i < ENEMY_COUNT; i++) {
     const jet = buildJetModel({ dark: true, withGear: false, withMissiles: false });
@@ -63,26 +63,29 @@ export function createBattle(scene, onEvent = () => {}) {
   }
 
   // ---- explosions ----------------------------------------------------------
-  // Pool of fireballs: emissive orange core + additive glow + 3 dark smoke
-  // puffs that rise and fade. drawExplosion() sets the visuals from age, so
-  // staged shots can freeze one mid-burst.
+  // Pool of fireballs: emissive orange-red core + additive glow + dark
+  // smoke puffs that rise and fade. drawExplosion() sets the visuals from
+  // age, so staged shots can freeze one mid-burst. v9: the core is a
+  // deeper red-orange (the old yellow-orange ball read as a second sun),
+  // the glow is smaller and dimmer, the fireball is squashed (not a perfect
+  // sphere) and the smoke dominates — an explosion, not a sunset.
   const puffGeo = new THREE.IcosahedronGeometry(1, 1);
   const explosions = [];
   for (let i = 0; i < EXPLOSION_POOL; i++) {
     const g = new THREE.Group();
     const fire = new THREE.Mesh(
       new THREE.SphereGeometry(1, 12, 10),
-      new THREE.MeshBasicMaterial({ color: 0xffa030, transparent: true, opacity: 0, fog: false }),
+      new THREE.MeshBasicMaterial({ color: 0xff5a00, transparent: true, opacity: 0, fog: false }),
     );
     g.add(fire);
     const glow = new THREE.Mesh(
       new THREE.SphereGeometry(1, 12, 10),
-      new THREE.MeshBasicMaterial({ color: 0xff6611, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }),
+      new THREE.MeshBasicMaterial({ color: 0xff3300, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }),
     );
     g.add(glow);
     const smoke = [];
-    for (let j = 0; j < 3; j++) {
-      const s = new THREE.Mesh(puffGeo, new THREE.MeshBasicMaterial({ color: 0x2a2a2e, transparent: true, opacity: 0, fog: false }));
+    for (let j = 0; j < 4; j++) {
+      const s = new THREE.Mesh(puffGeo, new THREE.MeshBasicMaterial({ color: 0x1c1a18, transparent: true, opacity: 0, fog: false }));
       g.add(s);
       smoke.push(s);
     }
@@ -95,23 +98,23 @@ export function createBattle(scene, onEvent = () => {}) {
     const s = e.size;
     if (a < 0.4) {
       const k = a / 0.4;
-      e.fire.scale.setScalar(Math.max(0.01, s * 7 * k));
+      e.fire.scale.set(Math.max(0.01, s * 6 * k), Math.max(0.01, s * 6 * k * 0.82), Math.max(0.01, s * 6 * k));
       e.fire.material.opacity = 0.95;
-      e.glow.scale.setScalar(Math.max(0.01, s * 11 * k));
-      e.glow.material.opacity = 0.55;
+      e.glow.scale.setScalar(Math.max(0.01, s * 8 * k));
+      e.glow.material.opacity = 0.4;
     } else {
       const k = Math.max(0, 1 - (a - 0.4) / 1.6);
-      e.fire.scale.setScalar(Math.max(0.01, s * 7 * (0.6 + 0.4 * k)));
+      e.fire.scale.set(Math.max(0.01, s * 6 * (0.6 + 0.4 * k)), Math.max(0.01, s * 6 * (0.6 + 0.4 * k) * 0.82), Math.max(0.01, s * 6 * (0.6 + 0.4 * k)));
       e.fire.material.opacity = 0.9 * k;
-      e.glow.scale.setScalar(Math.max(0.01, s * 11 * k));
-      e.glow.material.opacity = 0.5 * k;
+      e.glow.scale.setScalar(Math.max(0.01, s * 8 * k));
+      e.glow.material.opacity = 0.35 * k;
     }
     e.smoke.forEach((puff, j) => {
       const rise = Math.max(0, a - 0.3) * 7;
-      puff.position.set((j - 1) * s * 1.6, rise + j * s * 0.8, (j % 2 ? 1 : -1) * s * 1.2);
-      const sc = s * (1.5 + Math.max(0, a - 0.3) * 2.2);
+      puff.position.set((j - 1.5) * s * 1.4, rise + j * s * 0.7, (j % 2 ? 1 : -1) * s * 1.1);
+      const sc = s * (1.8 + Math.max(0, a - 0.3) * 2.4);
       puff.scale.setScalar(Math.max(0.01, sc));
-      puff.material.opacity = a > 0.3 ? Math.max(0, 0.55 * (1 - (a - 0.3) / 2.2)) : 0;
+      puff.material.opacity = a > 0.3 ? Math.max(0, 0.6 * (1 - (a - 0.3) / 2.2)) : 0;
     });
   }
   function triggerExplosion(pos, size = 1) {
@@ -185,6 +188,25 @@ export function createBattle(scene, onEvent = () => {}) {
   }
 
   // ---- player missiles --------------------------------------------------------
+  // v9: missiles fly 280 (bandits ~95 after the slowdown — a 150 m/s
+  // missile could never catch a 171 m/s bandit from behind, 0/7 splashes
+  // in the parent's verification). Hits use SWEPT detection: the segment
+  // from the missile's previous position to its new one is tested against
+  // the target sphere, so a hit registers at any frame rate instead of
+  // tunneling past the 9 m sphere between frames.
+  const MISSILE_SPEED = 280;
+  const HIT_RADIUS = 9;
+  const tmp3 = new THREE.Vector3();
+  const tmp4 = new THREE.Vector3();
+  function segmentHitsSphere(a, b, c, r) {
+    // Closest point on segment ab to point c; hit if within r.
+    tmp3.copy(b).sub(a);
+    const len2 = tmp3.lengthSq();
+    let t = len2 > 0 ? tmp4.copy(c).sub(a).dot(tmp3) / len2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    tmp4.copy(a).addScaledVector(tmp3, t);
+    return tmp4.distanceTo(c) < r;
+  }
   const missiles = [];
   for (let i = 0; i < 3; i++) {
     const g = new THREE.Group();
@@ -197,7 +219,7 @@ export function createBattle(scene, onEvent = () => {}) {
     g.add(tip);
     g.visible = false;
     scene.add(g);
-    missiles.push({ group: g, vel: new THREE.Vector3(), target: null, life: 0, active: false, trailTimer: 0 });
+    missiles.push({ group: g, vel: new THREE.Vector3(), prev: new THREE.Vector3(), target: null, life: 0, active: false, trailTimer: 0 });
   }
   // Missile smoke trail: small white puffs that fade fast.
   const trail = [];
@@ -300,7 +322,10 @@ export function createBattle(scene, onEvent = () => {}) {
       e.group.visible = true;
       e.group.position.copy(at(-5, 40, 5));
       e.group.rotation.set(0, planeState.yaw + Math.PI / 2 + Math.PI, -0.3, 'YXZ');
-      const ex = triggerExplosion(at(-18, 60, 14), 1.4);
+      // v9: the fireball sat on top of the sun and read as a second sun.
+      // Smaller (0.9), redder, smokier — and staged further right and
+      // LOWER, clear of the sun, so the two are separate objects in frame.
+      const ex = triggerExplosion(at(-26, 82, 4), 0.9);
       ex.age = 0.35;
       drawExplosion(ex);
     } else if (name === 'cockpit') {
@@ -431,16 +456,19 @@ export function createBattle(scene, onEvent = () => {}) {
       if (m.target && m.target.alive) {
         tmp.copy(m.target.group.position).sub(m.group.position).normalize();
         tmp2.copy(m.vel).normalize().lerp(tmp, Math.min(1, 2.5 * dt)).normalize();
-        m.vel.copy(tmp2).multiplyScalar(150);
-        if (m.group.position.distanceTo(m.target.group.position) < 9) {
-          triggerExplosion(m.target.group.position.clone(), 1.6);
-          killEnemy(m.target, t);
-          m.active = false;
-          m.group.visible = false;
-          continue;
-        }
+        m.vel.copy(tmp2).multiplyScalar(MISSILE_SPEED);
       }
+      m.prev.copy(m.group.position);
       m.group.position.addScaledVector(m.vel, dt);
+      // Swept hit: the segment the missile just flew, against the target
+      // sphere — a hit can no longer tunnel between frames.
+      if (m.target && m.target.alive && segmentHitsSphere(m.prev, m.group.position, m.target.group.position, HIT_RADIUS)) {
+        triggerExplosion(m.target.group.position.clone(), 1.6);
+        killEnemy(m.target, t);
+        m.active = false;
+        m.group.visible = false;
+        continue;
+      }
       tmp.copy(m.vel).normalize();
       m.group.lookAt(m.group.position.x + tmp.x, m.group.position.y + tmp.y, m.group.position.z + tmp.z);
       m.trailTimer -= dt;
