@@ -3,6 +3,7 @@
 
 import * as THREE from 'three';
 import { WORLD, RUNWAY, PEAKS, terrainHeight, mulberry32, clamp } from './config.js';
+import { buildTrees } from './trees.js';
 
 function canvasTexture(size, draw) {
   const c = document.createElement('canvas');
@@ -68,10 +69,13 @@ function buildTerrain(scene) {
   const pos = geo.attributes.position;
   const colors = new Float32Array(pos.count * 3);
   const sand = new THREE.Color(0xd9c08a);
+  const wetSand = new THREE.Color(0xb89a6a);
   const grassA = new THREE.Color(0x5d8a3c);
   const grassB = new THREE.Color(0x7aa84f);
-  const forest = new THREE.Color(0x3d6b2f);
-  const rock = new THREE.Color(0x8a7a68);
+  const wheat = new THREE.Color(0xc2a95c);
+  const forest = new THREE.Color(0x2f5d28);
+  const rock = new THREE.Color(0x7d6f5e);
+  const rockLight = new THREE.Color(0x9a938a);
   const c = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
@@ -79,15 +83,20 @@ function buildTerrain(scene) {
     const h = terrainHeight(x, z);
     pos.setY(i, h);
     const patch = 0.5 + 0.5 * Math.sin(x * 0.013 + 2.0) * Math.sin(z * 0.011 - 1.0);
-    if (h < 1.5) c.copy(sand);
-    else if (h < 26) c.copy(grassA).lerp(grassB, patch);
-    else if (h < 55) c.copy(grassB).lerp(forest, clamp((h - 26) / 29, 0, 1));
-    else c.copy(forest).lerp(rock, clamp((h - 55) / 40, 0, 1) * 0.7);
-    // Farmland stripes on the gentle slopes of the main island.
+    const patch2 = 0.5 + 0.5 * Math.sin(x * 0.031 - 0.7) * Math.sin(z * 0.027 + 1.3);
+    if (h < 0.8) c.copy(wetSand);
+    else if (h < 2.5) c.copy(sand);
+    else if (h < 26) {
+      c.copy(grassA).lerp(grassB, patch);
+      if (patch2 > 0.72) c.copy(wheat).lerp(c, 0.3); // golden field patches
+    } else if (h < 50) c.copy(grassB).lerp(forest, clamp((h - 26) / 24, 0, 1));
+    else c.copy(rock).lerp(rockLight, clamp((h - 60) / 40, 0, 1) * 0.6);
+    // Farmland stripes on the gentle slopes + large-scale mottling.
     if (h > 2 && h < 22) {
-      const stripe = Math.sin((x + z) * 0.11) > 0 ? 1 : 0.88;
+      const stripe = Math.sin((x + z) * 0.11) > 0 ? 1 : 0.85;
       c.multiplyScalar(stripe);
     }
+    c.multiplyScalar(0.94 + patch2 * 0.1);
     colors[i * 3] = c.r;
     colors[i * 3 + 1] = c.g;
     colors[i * 3 + 2] = c.b;
@@ -117,10 +126,10 @@ function buildSea(scene) {
   const mat = new THREE.MeshPhongMaterial({
     color: 0x1a5f7a,
     map: glitter,
-    shininess: 140,
+    shininess: 220,
     specular: 0xffc27a,
     transparent: true,
-    opacity: 0.96,
+    opacity: 1.0,
   });
   const sea = new THREE.Mesh(new THREE.PlaneGeometry(WORLD.size * 2.4, WORLD.size * 2.4), mat);
   sea.rotation.x = -Math.PI / 2;
@@ -198,56 +207,144 @@ function buildRunway(scene) {
 
 function buildTown(scene, rng) {
   const group = new THREE.Group();
+  // Lit windows on every wall: the texture is the wall map, tinted per house.
   const winTex = canvasTexture(128, (g, s) => {
-    g.fillStyle = '#e8dcc8';
+    g.fillStyle = '#f2e6c8';
     g.fillRect(0, 0, s, s);
     for (let row = 0; row < 6; row++) {
       for (let col = 0; col < 5; col++) {
-        const lit = rng() > 0.45;
-        g.fillStyle = lit ? '#ffd27a' : '#3a4a5a';
+        const lit = rng() > 0.4;
+        g.fillStyle = lit ? '#ffd27a' : '#33414f';
         g.fillRect(10 + col * 23, 10 + row * 19, 13, 11);
       }
     }
   });
-  // Buildings are simple boxes with a lit-window texture; the emissive tint
-  // makes the town read at golden hour from the air.
-  const wall = new THREE.MeshLambertMaterial({ map: winTex, emissive: 0x664411 });
-  const base = new THREE.MeshLambertMaterial({ color: 0x8a7a68 });
-  const roofs = new THREE.MeshLambertMaterial({ color: 0xb4502e });
-  const positions = [];
-  for (let i = 0; i < 46; i++) {
-    const a = rng() * Math.PI * 2;
-    const r = 50 + rng() * 110;
-    // Town sits well east of the strip so the runway and the final approach
-    // stay clear of buildings.
-    const x = RUNWAY.x + 170 + Math.cos(a) * r * 0.9;
-    const z = RUNWAY.z + 110 + Math.sin(a) * r * 0.7;
-    positions.push([x, z]);
+  const wallColors = [0xf2e6c8, 0xfaf6ea, 0xf0d9a8, 0xe8c9a0, 0xdfd3b8];
+  const roofColors = [0xb4502e, 0x9e3d24, 0xc46a3a, 0x7a4a2b, 0xa85438];
+  // Three streets running along the coast east of the strip: houses in rows
+  // with varied footprints, heights, wall and roof colours.
+  const streets = [
+    { x: RUNWAY.x + 150, z0: RUNWAY.z - 40, z1: RUNWAY.z + 260 },
+    { x: RUNWAY.x + 205, z0: RUNWAY.z - 20, z1: RUNWAY.z + 240 },
+    { x: RUNWAY.x + 255, z0: RUNWAY.z + 0, z1: RUNWAY.z + 220 },
+  ];
+  for (const st of streets) {
+    const n = 13;
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1);
+      const x = st.x + (rng() - 0.5) * 24;
+      const z = st.z0 + t * (st.z1 - st.z0) + (rng() - 0.5) * 12;
+      const h = terrainHeight(x, z);
+      if (h < 1) continue;
+      const w = 9 + rng() * 9;
+      const d = 9 + rng() * 8;
+      const tall = 6 + rng() * 9;
+      const wallMat = new THREE.MeshLambertMaterial({
+        map: winTex,
+        color: wallColors[Math.floor(rng() * wallColors.length)],
+        emissive: 0x553311,
+      });
+      const box = new THREE.Mesh(new THREE.BoxGeometry(w, tall, d), wallMat);
+      box.position.set(x, h + tall / 2 - 0.5, z);
+      box.rotation.y = (rng() - 0.5) * 0.35;
+      box.castShadow = true;
+      group.add(box);
+      const roofMat = new THREE.MeshLambertMaterial({ color: roofColors[Math.floor(rng() * roofColors.length)] });
+      if (rng() > 0.45) {
+        // Pyramid roof.
+        const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) * 0.62, 2.5 + rng() * 2.5, 4), roofMat);
+        roof.position.set(x, h + tall + 1.2, z);
+        roof.rotation.y = Math.PI / 4 + box.rotation.y;
+        group.add(roof);
+      } else {
+        // Gable roof: two sloped slabs meeting at a ridge.
+        for (const s of [-1, 1]) {
+          const slab = new THREE.Mesh(new THREE.BoxGeometry(w * 0.62, 0.28, d * 1.06), roofMat);
+          slab.position.set(x - s * w * 0.21, h + tall + 1.2, z);
+          slab.rotation.z = s * 0.5;
+          slab.rotation.y = box.rotation.y;
+          group.add(slab);
+        }
+      }
+    }
   }
-  for (const [x, z] of positions) {
-    const h = terrainHeight(x, z);
-    if (h < 1) continue;
-    const w = 10 + rng() * 14;
-    const d = 10 + rng() * 12;
-    const tall = 7 + rng() * 11;
-    const box = new THREE.Mesh(new THREE.BoxGeometry(w, tall, d), base);
-    box.position.set(x, h + tall / 2 - 0.5, z);
-    box.rotation.y = rng() * Math.PI;
-    box.castShadow = true;
-    group.add(box);
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) * 0.6, 3 + rng() * 2.5, 4), roofs);
-    roof.position.set(x, h + tall + 1.4, z);
-    roof.rotation.y = Math.PI / 4 + rng() * 0.4;
-    group.add(roof);
-    // One glowing window wall per building, facing the runway.
-    const win = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.8, tall * 0.7), wall);
-    win.position.set(x, h + tall / 2, z);
-    win.rotation.y = Math.atan2(RUNWAY.x - x, RUNWAY.z - z);
-    win.translateZ(d / 2 + 0.15);
-    group.add(win);
-  }
+  // Landmark: a taller white house with a tower in the middle of town.
+  const churchX = RUNWAY.x + 185;
+  const churchZ = RUNWAY.z + 120;
+  const churchH = terrainHeight(churchX, churchZ);
+  const churchMat = new THREE.MeshLambertMaterial({ map: winTex, color: 0xfaf6ea, emissive: 0x553311 });
+  const church = new THREE.Mesh(new THREE.BoxGeometry(13, 15, 12), churchMat);
+  church.position.set(churchX, churchH + 7, churchZ);
+  church.castShadow = true;
+  group.add(church);
+  const tower = new THREE.Mesh(new THREE.BoxGeometry(4.5, 11, 4.5), churchMat);
+  tower.position.set(churchX + 4, churchH + 20, churchZ - 3);
+  group.add(tower);
+  const towerRoof = new THREE.Mesh(new THREE.ConeGeometry(3.6, 4.5, 4), new THREE.MeshLambertMaterial({ color: 0x9e3d24 }));
+  towerRoof.position.set(churchX + 4, churchH + 28, churchZ - 3);
+  towerRoof.rotation.y = Math.PI / 4;
+  group.add(towerRoof);
+  const churchRoof = new THREE.Mesh(new THREE.ConeGeometry(9.5, 4, 4), new THREE.MeshLambertMaterial({ color: 0xb4502e }));
+  churchRoof.position.set(churchX, churchH + 17, churchZ);
+  churchRoof.rotation.y = Math.PI / 4;
+  group.add(churchRoof);
+  // Lighthouse on the shore east of town: white tower, red bands, lit top.
+  const lhX = 430;
+  const lhZ = -280;
+  const lhH = terrainHeight(lhX, lhZ);
+  const lhWhite = new THREE.MeshLambertMaterial({ color: 0xfaf6ea });
+  const lhRed = new THREE.MeshLambertMaterial({ color: 0xc23a22 });
+  const lhBase = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 4, 9, 10), lhWhite);
+  lhBase.position.set(lhX, lhH + 4.5, lhZ);
+  group.add(lhBase);
+  const lhBand = new THREE.Mesh(new THREE.CylinderGeometry(2.9, 3.1, 4, 10), lhRed);
+  lhBand.position.set(lhX, lhH + 11, lhZ);
+  group.add(lhBand);
+  const lhTop = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.8, 5, 10), lhWhite);
+  lhTop.position.set(lhX, lhH + 15.5, lhZ);
+  group.add(lhTop);
+  const lhLamp = new THREE.Mesh(
+    new THREE.SphereGeometry(1.6, 10, 8),
+    new THREE.MeshBasicMaterial({ color: 0xffe9a8 }),
+  );
+  lhLamp.position.set(lhX, lhH + 19.5, lhZ);
+  group.add(lhLamp);
   scene.add(group);
   return group;
+}
+
+function buildCrags(scene) {
+  const rockMat = new THREE.MeshLambertMaterial({ color: 0x8d8172 });
+  // Rocky summits on the tall peaks that sit clear of the ring course.
+  const crags = [
+    [620, 60, 30, 34],
+    [-620, -120, 26, 30],
+    [820, -160, 22, 26],
+    [-760, -560, 24, 28],
+  ];
+  crags.forEach(([x, z, r, h], i) => {
+    const base = terrainHeight(x, z);
+    const crag = new THREE.Mesh(new THREE.ConeGeometry(r, h, 7), rockMat);
+    crag.position.set(x, base + h / 2 - 4, z);
+    crag.rotation.y = i * 0.7;
+    crag.castShadow = true;
+    scene.add(crag);
+  });
+  // Scattered boulders on the high slopes.
+  const rng = mulberry32(99);
+  const boulderGeo = new THREE.DodecahedronGeometry(1, 0);
+  for (let i = 0; i < 70; i++) {
+    const x = (rng() - 0.5) * 2200;
+    const z = (rng() - 0.5) * 2200;
+    const h = terrainHeight(x, z);
+    if (h < 28 || h > 90) continue;
+    const s = 2 + rng() * 4;
+    const b = new THREE.Mesh(boulderGeo, rockMat);
+    b.position.set(x, h + s * 0.3, z);
+    b.scale.setScalar(s);
+    b.rotation.set(rng() * 3, rng() * 3, rng() * 3);
+    scene.add(b);
+  }
 }
 
 export function buildWorld(scene, seed = 1) {
@@ -271,8 +368,13 @@ export function buildWorld(scene, seed = 1) {
   sun.shadow.camera.far = 1600;
   sun.shadow.bias = -0.0006;
   scene.add(sun);
-  scene.add(new THREE.HemisphereLight(0x8fb0e0, 0x5a4a3a, 0.9));
-  scene.add(new THREE.AmbientLight(0x604a38, 0.5));
+  // Warm fill from the south-west so the plane's shadowed side (and the
+  // front view on the runway) stays readable instead of going black.
+  const fill = new THREE.DirectionalLight(0xffd9b0, 0.7);
+  fill.position.set(-350, 220, 550);
+  scene.add(fill);
+  scene.add(new THREE.HemisphereLight(0x8fb0e0, 0x5a4a3a, 1.15));
+  scene.add(new THREE.AmbientLight(0x604a38, 0.55));
 
   const dome = buildSky(scene, rng);
   const terrain = buildTerrain(scene);
@@ -280,6 +382,8 @@ export function buildWorld(scene, seed = 1) {
   const clouds = buildClouds(scene, rng);
   buildRunway(scene);
   buildTown(scene, rng);
+  buildCrags(scene);
+  buildTrees(scene, seed);
 
   return {
     sun,

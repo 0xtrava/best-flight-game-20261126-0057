@@ -18,33 +18,36 @@ export function parseShot() {
 export function stageShot(name, G) {
   const F = G.flight.state;
   if (name === 'start') {
-    G.flight.resetTo(RUNWAY.x, RUNWAY.altitude + 2, RUNWAY.z, Math.PI + RUNWAY.heading, 0);
+    G.flight.resetTo(RUNWAY.x, RUNWAY.altitude + 2, RUNWAY.z, RUNWAY.heading, 0);
     G.flight.state.throttle = 0;
     G.flight.state.speed = 0;
     G.setState('menu');
     G.setCameraMode('orbit');
-    G.setOrbitAngle(2.5); // from the north-east: the sun lights the plane's nose
+    G.setOrbitAngle(0.15); // from the south, looking north: the plane's nose
+    // faces the camera, the town sits to the right, the runway runs away.
+    G.setOrbitRadius(16);
     document.body.classList.add('shot-frame');
     G.hud.showMenu(0);
     return true;
   }
   if (name === 'play') {
-    // Mid-course: two rings banked through, diving at ring 3 over the islands.
-    const ring = G.course.rings[2];
-    const prev = G.course.rings[1];
+    // Late course: ten rings banked through, diving at ring 11 toward the
+    // sunset — the plane flies almost straight into the low sun, with the
+    // sea and the islands behind the ring.
+    const ring = G.course.rings[10];
+    const prev = G.course.rings[9];
     const dir = new THREE.Vector3().subVectors(ring.center, prev.center).normalize();
     const p = ring.center.clone().addScaledVector(dir, -70);
-    G.course.state.nextIndex = 2;
-    G.course.state.passedCount = 2;
-    G.course.state.score = 1000;
-    G.course.rings[0].passed = true;
-    G.course.rings[1].passed = true;
+    G.course.state.nextIndex = 10;
+    G.course.state.passedCount = 10;
+    G.course.state.score = 5000;
+    for (let i = 0; i < 10; i++) G.course.rings[i].passed = true;
     G.course.refreshLooks();
     G.flight.resetTo(p.x, p.y + 6, p.z, Math.atan2(dir.x, dir.z), 66);
-    G.flight.state.roll = 0.55;
-    G.flight.state.pitch = -0.08;
-    G.flight.state.throttle = 0.72;
-    G.setElapsed(95);
+    G.flight.state.roll = 0.5;
+    G.flight.state.pitch = -0.06;
+    G.flight.state.throttle = 0.7;
+    G.setElapsed(480);
     G.setState('flying');
     G.setCameraMode('chase');
     G.hud.hideMenu();
@@ -74,12 +77,12 @@ export function stageShot(name, G) {
   }
   if (name === 'end') {
     // Landed at sunset: plane on the runway, results screen up.
-    G.flight.resetTo(RUNWAY.x, RUNWAY.altitude + 2, RUNWAY.z, Math.PI + RUNWAY.heading, 0);
+    G.flight.resetTo(RUNWAY.x, RUNWAY.altitude + 2, RUNWAY.z, RUNWAY.heading, 0);
     G.flight.state.throttle = 0;
     G.flight.state.speed = 0;
     G.course.state.nextIndex = 12;
     G.course.state.passedCount = 12;
-    G.course.state.score = 8420;
+    G.course.state.score = 9840; // synced with the results card total
     G.course.rings.forEach((r) => {
       r.passed = true;
     });
@@ -87,7 +90,8 @@ export function stageShot(name, G) {
     G.setElapsed(522);
     G.setState('results');
     G.setCameraMode('orbit');
-    G.setOrbitAngle(2.5);
+    G.setOrbitAngle(0.15);
+    G.setOrbitRadius(18);
     document.body.classList.add('shot-frame');
     // Landed: no next ring to point at.
     document.getElementById('chevron').style.display = 'none';

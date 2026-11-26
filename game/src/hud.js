@@ -108,7 +108,7 @@ export function createHud() {
       document.getElementById('hint').classList.toggle('hidden', on);
     },
     // Called every frame while flying.
-    update(flight, course, elapsed, cameraMode) {
+    update(flight, course, elapsed, cameraMode, gameState) {
       const { pos, speed, throttle, pitch, roll, yaw } = flight;
       const knots = Math.round(speed * 1.9);
       const feet = Math.round(pos.y * 3.28);
@@ -125,8 +125,13 @@ export function createHud() {
       el.horizon.style.transform = `rotate(0deg)`;
 
       // Next-ring chevron: rotate by the bearing relative to the heading.
-      const target = course.nextRing();
-      if (target) {
+      // Only while flying — on the menu/results screens the cards own it.
+      const target = gameState === 'flying' ? course.nextRing() : null;
+      if (gameState !== 'flying') {
+        el.chevron.style.opacity = '0';
+        document.getElementById('target-box').style.display = 'none';
+      } else if (target) {
+        document.getElementById('target-box').style.display = '';
         const dx = target.center.x - pos.x;
         const dz = target.center.z - pos.z;
         const bearing = Math.atan2(dx, dz); // bearing in the same frame as yaw
@@ -139,6 +144,7 @@ export function createHud() {
         el.targetLabel.textContent = `RING ${course.state.nextIndex + 1}`;
         el.chevron.style.opacity = '1';
       } else {
+        document.getElementById('target-box').style.display = '';
         el.targetLabel.textContent = 'RETURN TO RUNWAY';
         const dx = -40 - pos.x;
         const dz = -420 - pos.z;

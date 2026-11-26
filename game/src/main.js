@@ -59,6 +59,7 @@ function main() {
   let crashTimer = 0;
   let frozen = false; // a staged ?shot= holds the plane still for the camera
   let orbitAngle = 0.6;
+  let orbitRadius = 34;
   let resultShown = false;
 
   const api = {
@@ -94,9 +95,16 @@ function main() {
       cameraMode = m;
       hud.setCockpit(m === 'cockpit');
       plane.canopy.visible = m !== 'cockpit';
+      // In the cockpit the prop is right in front of the camera: fade the
+      // blades to a blur and thin the disc out, or they read as black bars.
+      plane.bladeMat.opacity = m === 'cockpit' ? 0.22 : 1;
+      plane.discMat.opacity = m === 'cockpit' ? 0.07 : 0.16;
     },
     setOrbitAngle(a) {
       orbitAngle = a;
+    },
+    setOrbitRadius(r) {
+      orbitRadius = r;
     },
     setElapsed(s) {
       elapsed = s;
@@ -131,6 +139,7 @@ function main() {
     const bonus = course.landingBonus(elapsed);
     const total = course.state.score + bonus;
     course.state.score = total;
+    hud.update(flight.state, course, elapsed, cameraMode, 'results'); // HUD score = final total, incl. landing bonus.
     const best = bestScore();
     const isBest = total > best;
     if (isBest) saveBest(total);
@@ -157,19 +166,20 @@ function main() {
 
   function updateChaseCamera(dt) {
     const fwd = forwardVector(flight.state.yaw, flight.state.pitch);
-    const desired = flight.state.pos.clone().addScaledVector(fwd, -13.5).add(new THREE.Vector3(0, 4.6, 0));
+    const desired = flight.state.pos.clone().addScaledVector(fwd, -10.5).add(new THREE.Vector3(0, 3.4, 0));
     const k = 1 - Math.exp(-5.5 * dt);
     camera.position.lerp(desired, k);
-    const look = flight.state.pos.clone().addScaledVector(fwd, 26).add(new THREE.Vector3(0, 1.2, 0));
+    const look = flight.state.pos.clone().addScaledVector(fwd, 30).add(new THREE.Vector3(0, 1.0, 0));
     camera.lookAt(look);
   }
 
   function updateCockpitCamera() {
-    // Sit just behind and above the canopy, looking over the nose: the prop,
-    // the runway and the instruments stay in frame, the canopy stays out of it.
+    // Sit high above the canopy nose, looking over the nose and the spinning
+    // prop: the wing stays below the frame, the runway stays in frame, and
+    // the prop reads small instead of filling the screen.
     const fwd = forwardVector(flight.state.yaw, flight.state.pitch);
     const up = new THREE.Vector3(0, 1, 0);
-    const pos = flight.state.pos.clone().addScaledVector(up, 1.7).addScaledVector(fwd, -1.7);
+    const pos = flight.state.pos.clone().addScaledVector(up, 1.9).addScaledVector(fwd, 0.2);
     camera.position.copy(pos);
     const look = flight.state.pos.clone().addScaledVector(fwd, 120).addScaledVector(up, -5);
     // Roll the horizon with the plane: tilt the camera up vector.
@@ -179,11 +189,11 @@ function main() {
 
   function updateOrbitCamera(dt) {
     orbitAngle += dt * 0.07;
-    const r = 34;
+    const r = orbitRadius;
     const target = flight.state.pos.clone().add(new THREE.Vector3(0, 1.5, 0));
     camera.position.set(
       target.x + Math.sin(orbitAngle) * r,
-      target.y + 12,
+      target.y + r * 0.35,
       target.z + Math.cos(orbitAngle) * r,
     );
     camera.lookAt(target);
@@ -198,7 +208,7 @@ function main() {
       if (params.name === 'play') updateChaseCamera(1);
       if (params.name === 'cockpit') updateCockpitCamera();
       if (params.name === 'start' || params.name === 'end') updateOrbitCamera(0);
-      hud.update(flight.state, course, elapsed, cameraMode);
+      hud.update(flight.state, course, elapsed, cameraMode, gameState);
     }
   }
   if (!staged) hud.showMenu(bestScore());
@@ -289,7 +299,7 @@ function main() {
     else updateChaseCamera(frozen ? 1 : dt);
 
     world.update(dt, t, flight.state.pos);
-    if (gameState === 'flying' || frozen) hud.update(flight.state, course, elapsed, cameraMode);
+    if (gameState === 'flying' || frozen) hud.update(flight.state, course, elapsed, cameraMode, gameState);
 
     renderer.render(scene, camera);
     if (firstFrame) {
