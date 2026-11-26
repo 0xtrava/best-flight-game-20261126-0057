@@ -8,6 +8,7 @@ import { createAudio } from './audio.js';
 import { buildWorld } from './world.js';
 import { buildPlaneModel, createFlight, forwardVector } from './plane.js';
 import { createCourse } from './rings.js';
+import { createBattle } from './battle.js';
 import { createHud } from './hud.js';
 import { parseShot, stageShot } from './shots.js';
 
@@ -49,6 +50,13 @@ function main() {
   scene.add(plane.group);
   const flight = createFlight();
   const course = createCourse(scene);
+  // v8: the war. onEvent feeds missile kills back into the score + toast.
+  const battle = createBattle(scene, (ev) => {
+    if (ev.type === 'kill') {
+      course.state.score += ev.points;
+      hud.showToast(`SPLASH! +${ev.points}`, 1500);
+    }
+  });
   const hud = createHud();
   const input = createInput();
   const audio = createAudio();
@@ -65,6 +73,7 @@ function main() {
   const api = {
     flight,
     course,
+    battle,
     hud,
     camera,
     RINGS,
@@ -95,18 +104,14 @@ function main() {
       cameraMode = m;
       hud.setCockpit(m === 'cockpit');
       plane.canopy.visible = m !== 'cockpit';
-      // Cockpit: the whole prop stays HIDDEN. A faint prop blur was tried
-      // in v4 — but a 3.4 m blade 2.25 m from the camera subtends ~74°,
-      // so even at 0.15 opacity it reads as a dark diagonal band across
-      // the frame (the v2 slab, back again). The nose cowl at the bottom
-      // of the frame is the aircraft cue; the prop blur is not worth the
-      // slab. Chase view keeps the full prop + disc.
+      // Cockpit: the whole afterburner stays HIDDEN. The jet's tail is
+      // behind the pilot anyway; the pointed nose cone at the bottom of
+      // the frame is the aircraft cue. Chase view keeps the full flame.
       plane.prop.visible = m !== 'cockpit';
       plane.bladeMat.opacity = m === 'cockpit' ? 0 : 1;
-      // Chase/hero disc reads as a spinning prop blur at 0.14 (was 0.04,
-      // nearly invisible in the cover). Cockpit stays 0 — the prop is
-      // hidden there entirely, the slab lesson from v2/v4.
-      plane.discMat.opacity = m === 'cockpit' ? 0 : 0.14;
+      // Chase/hero flame reads as an afterburner at 0.85 (its own material
+      // opacity). Cockpit stays 0 — the flame is hidden there entirely.
+      plane.discMat.opacity = m === 'cockpit' ? 0 : 0.75;
     },
     setOrbitAngle(a) {
       orbitAngle = a;
@@ -133,6 +138,7 @@ function main() {
 
   function startFlight() {
     course.reset();
+    battle.reset();
     flight.resetTo(RUNWAY.x, RUNWAY.altitude + 2, RUNWAY.z, Math.PI + RUNWAY.heading, 0);
     flight.state.throttle = 0.55;
     elapsed = 0;
@@ -142,7 +148,7 @@ function main() {
     hud.setCockpit(false);
     hud.hideMenu();
     hud.hideResults();
-    hud.showToast('Take off — fly through the rings!', 2200);
+    hud.showToast('Scramble! Fly the rings — splash the bandits!', 2200);
     audio.unlock();
   }
 
@@ -184,22 +190,18 @@ function main() {
     camera.lookAt(look);
   }
 
-  // Hero camera (v5 front-left 3/4, RESTORED): nose, spinner, prop blur,
-  // cabin windows and cheatline all visible, plane big in frame. A v6
-  // rear-left 3/4 was tried so the ring could share the frame — the ring
-  // DID appear, but from behind the banked plane reads as a red blob with
-  // a giant white wing-bar and the tail clips the frame edge. The ring
-  // cannot share the frame with a big plane from any rear angle, and the
-  // front hero is the shot that sells the plane — the HUD carries the
-  // ring info ("RING 2 / 70 m" + chevron). Never used in live play.
+  // Hero camera (v8: pulled a touch closer — the fighter's span is half
+  // the Cessna's, so the old v5 distances left it small in frame). Nose,
+  // canopy, swept wings and afterburner all visible, jet big in frame.
+  // Never used in live play.
   function updateHeroCamera() {
     const fwd = forwardVector(flight.state.yaw, flight.state.pitch);
     const up = new THREE.Vector3(0, 1, 0);
     const right = new THREE.Vector3().crossVectors(fwd, up).normalize();
     const pos = flight.state.pos.clone()
-      .addScaledVector(fwd, 10)
-      .addScaledVector(right, -13)
-      .addScaledVector(up, 3);
+      .addScaledVector(fwd, 8)
+      .addScaledVector(right, -11)
+      .addScaledVector(up, 2.5);
     camera.position.copy(pos);
     // Look just ahead of the plane, not 16 m out: the look target sets
     // the frame centre, and a far target pushes the plane itself off the
@@ -207,18 +209,18 @@ function main() {
     // v5.1 sat too close to the wing (5 m): the near wing filled the
     // frame as a flat maroon slab. Pulled back + more to the front, so
     // the wing reads as a wing and the nose + windows carry the shot.
-    const look = flight.state.pos.clone().addScaledVector(fwd, 6).addScaledVector(up, 2);
+    const look = flight.state.pos.clone().addScaledVector(fwd, 5).addScaledVector(up, 1.5);
     camera.lookAt(look);
   }
 
   function updateCockpitCamera() {
-    // Sit just behind the nose, above the cowl: the white nose + maroon
-    // belly read at the bottom of the frame (v3 sat ahead of the wing and
-    // the shot had no aircraft in it at all), the runway stays dead ahead,
-    // and the prop is a faint blur 2 m out instead of a slab at 1 m.
+    // Sit just behind the nose, above the nose cone: the pointed grey nose
+    // reads at the bottom of the frame (v3 sat ahead of the wing and the
+    // shot had no aircraft in it at all), the runway stays dead ahead,
+    // and the canopy is hidden so the pilot sees out.
     const fwd = forwardVector(flight.state.yaw, flight.state.pitch);
     const up = new THREE.Vector3(0, 1, 0);
-    const pos = flight.state.pos.clone().addScaledVector(up, 1.12).addScaledVector(fwd, 1.1);
+    const pos = flight.state.pos.clone().addScaledVector(up, 1.32).addScaledVector(fwd, 0.7);
     camera.position.copy(pos);
     const look = flight.state.pos.clone().addScaledVector(fwd, 120).addScaledVector(up, -5);
     // Roll the horizon with the plane: tilt the camera up vector.
@@ -247,7 +249,7 @@ function main() {
       if (params.name === 'play') updateHeroCamera();
       if (params.name === 'cockpit') updateCockpitCamera();
       if (params.name === 'start' || params.name === 'end') updateOrbitCamera(0);
-      hud.update(flight.state, course, elapsed, cameraMode, gameState);
+      hud.update(flight.state, course, elapsed, cameraMode, gameState, battle.combat);
     }
   }
   if (!staged) hud.showMenu(bestScore());
@@ -298,6 +300,7 @@ function main() {
       if (gameState === 'flying') {
         elapsed += dt;
         flight.update(dt, input.state);
+        if (input.state.fire) battle.fireMissile(flight.state);
         const event = course.update(dt, t, flight.state.pos);
         if (event) {
           audio.ring(event.event === 'ring-center');
@@ -330,7 +333,18 @@ function main() {
     // Plane mesh follows the flight state.
     plane.group.position.copy(flight.state.pos);
     plane.group.rotation.set(flight.state.pitch, flight.state.yaw + Math.PI, -flight.state.roll, 'YXZ');
+    // v8.1: gear retracts once airborne — wheels dangling under a fighter
+    // in the air read wrong. On the ground (menu, takeoff roll, landed)
+    // it stays down.
+    if (plane.gear) plane.gear.visible = !flight.state.airborne;
     plane.prop.rotation.z -= flight.state.speed * dt * 0.85 + (gameState === 'menu' ? 0.12 : 0);
+    // v8: afterburner flicker — the flame breathes while the jet flies.
+    if (plane.afterburner) {
+      const f = 1 + Math.sin(t * 38) * 0.12 + Math.sin(t * 61) * 0.08;
+      plane.afterburner.scale.set(f, f, 1 + Math.sin(t * 47) * 0.18);
+    }
+    // v8: the war runs every frame (frozen staged shots hold their frame).
+    battle.update(dt, t, flight.state.pos, forwardVector(flight.state.yaw, flight.state.pitch), frozen, gameState === 'flying');
 
     // Cameras.
     if (gameState === 'menu' || gameState === 'results') updateOrbitCamera(frozen ? 0 : dt);
@@ -339,7 +353,7 @@ function main() {
     else updateChaseCamera(frozen ? 1 : dt);
 
     world.update(dt, t, flight.state.pos);
-    if (gameState === 'flying' || frozen) hud.update(flight.state, course, elapsed, cameraMode, gameState);
+    if (gameState === 'flying' || frozen) hud.update(flight.state, course, elapsed, cameraMode, gameState, battle.combat);
 
     renderer.render(scene, camera);
     if (firstFrame) {

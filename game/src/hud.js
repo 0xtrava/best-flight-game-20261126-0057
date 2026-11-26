@@ -18,6 +18,8 @@ export function createHud() {
     chevron: $('chevron'),
     targetDist: $('target-dist'),
     targetLabel: $('target-label'),
+    targets: $('hud-targets'),
+    msl: $('hud-msl'),
     toast: $('toast'),
     menu: $('menu'),
     menuBest: $('menu-best'),
@@ -108,7 +110,7 @@ export function createHud() {
       document.getElementById('hint').classList.toggle('hidden', on);
     },
     // Called every frame while flying.
-    update(flight, course, elapsed, cameraMode, gameState) {
+    update(flight, course, elapsed, cameraMode, gameState, combat) {
       const { pos, speed, throttle, pitch, roll, yaw } = flight;
       const knots = Math.round(speed * 1.9);
       const feet = Math.round(pos.y * 3.28);
@@ -120,6 +122,9 @@ export function createHud() {
       el.score.textContent = course.state.score.toLocaleString('en-US');
       el.rings.textContent = `${course.state.passedCount}/12`;
       el.time.textContent = formatTime(elapsed);
+      // v8: bandits left in the sky + missiles left in the racks.
+      if (combat && el.targets) el.targets.textContent = String(combat.enemiesAlive);
+      if (combat && el.msl) el.msl.textContent = String(combat.ammo);
       el.throttleFill.style.height = `${Math.round(throttle * 100)}%`;
       el.horizonLine.style.transform = `rotate(${-roll}rad) translateY(${pitch * 42}px)`;
       el.horizon.style.transform = `rotate(0deg)`;

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MERIDIAN RUN — Golden-Hour Island Flight</title>
+<title>MERIDIAN RUN — Fighter Intercept</title>
 <link rel="icon" href="data:,">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -112,6 +112,8 @@
     <div class="label">SCORE</div><div class="value" id="hud-score">0</div>
     <div class="label" style="margin-top:6px">RINGS <span id="hud-rings" style="color:#fff;font-size:15px">0/12</span>
       &nbsp;·&nbsp; TIME <span id="hud-time" style="color:#fff;font-size:15px">00:00</span></div>
+    <div class="label" style="margin-top:6px">BANDITS <span id="hud-targets" style="color:#ff9a5a;font-size:15px">4</span>
+      &nbsp;·&nbsp; MSL <span id="hud-msl" style="color:#fff;font-size:15px">6</span></div>
   </div>
   <div class="panel" id="panel-attitude">
     <div id="horizon-disc"><div id="horizon-line"></div></div>
@@ -120,7 +122,7 @@
   </div>
   <div id="chevron">▲</div>
   <div id="target-box"><div id="target-label">RING 1</div><div id="target-dist">0 m</div></div>
-  <div id="hint">↑/W climb · ↓/S dive · ←/→ bank · Q/E rudder<br>Shift throttle up · Ctrl throttle down · C camera · P pause · M mute</div>
+  <div id="hint">↑/W climb · ↓/S dive · ←/→ bank · Q/E rudder<br>Shift throttle up · Ctrl throttle down · C camera · P pause · M mute · Space fire missile</div>
   <div id="toast"></div>
 </div>
 
@@ -136,13 +138,14 @@
 <div class="overlay" id="menu">
   <div class="card">
     <h1>MERIDIAN RUN</h1>
-    <h2>GOLDEN-HOUR ISLAND FLIGHT</h2>
-    <p>Take off from the coastal strip, thread all twelve glowing rings over the
-      archipelago, then bring her home and land on the runway. Sunset waits for no pilot.</p>
+    <h2>FIGHTER INTERCEPT OVER THE ARCHIPELAGO</h2>
+    <p>Scramble from the coastal strip — thread all twelve glowing rings over
+      the archipelago while bandits work the sky, splash them with missiles,
+      then bring her home and land on the runway. The fight is on.</p>
     <div class="controls">
       <b>↑ / W</b> climb &nbsp; <b>↓ / S</b> dive &nbsp; <b>← → / A D</b> bank &amp; turn<br>
       <b>Q / E</b> rudder &nbsp; <b>Shift</b> throttle up &nbsp; <b>Ctrl</b> throttle down<br>
-      <b>C</b> cockpit camera &nbsp; <b>P</b> pause &nbsp; <b>M</b> mute
+      <b>Space</b> fire missile &nbsp; <b>C</b> cockpit camera &nbsp; <b>P</b> pause &nbsp; <b>M</b> mute
     </div>
     <div><span class="cta">PRESS ENTER OR CLICK TO FLY</span></div>
     <div class="best" id="menu-best"></div>

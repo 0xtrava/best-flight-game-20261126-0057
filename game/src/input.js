@@ -9,6 +9,7 @@ export function createInput() {
     yaw: 0, // -1 (left) .. +1 (right)
     throttleUp: false,
     throttleDown: false,
+    fire: false, // edge: Space went down this frame (v8 missile fire)
     mouseDX: 0,
     mouseDY: 0,
     mouseActive: false,
@@ -62,6 +63,7 @@ export function createInput() {
       state.yaw = (k.has('e') ? 1 : 0) - (k.has('q') ? 1 : 0);
       state.throttleUp = k.has('shift');
       state.throttleDown = k.has('control');
+      state.fire = pressed.has(' ');
       pressed.clear();
       const dx = state.mouseDX;
       const dy = state.mouseDY;

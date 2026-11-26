@@ -52,11 +52,14 @@ export function stageShot(name, G) {
     G.flight.state.roll = 0.3;
     G.flight.state.pitch = -0.06;
     G.flight.state.throttle = 0.7;
+    G.flight.state.airborne = true; // v8.1: gear up in flight
     G.setElapsed(75);
     G.setState('flying');
     G.setCameraMode('hero'); // v5 front-left 3/4 on the sunlit side (see
-    // main.js updateHeroCamera): nose, prop, windows and cheatline all
-    // visible, plane big in frame, ring 2 still in the background.
+    // main.js updateHeroCamera): nose, canopy, swept wings and afterburner
+    // all visible, jet big in frame. v8 stages the battle into the frame:
+    // a head-on bandit ahead-left and an explosion ahead-right.
+    G.battle.stage('play', G.flight.state);
     G.hud.hideMenu();
     return true;
   }
@@ -67,6 +70,7 @@ export function stageShot(name, G) {
     const p = new THREE.Vector3(RUNWAY.x - 60, RUNWAY.altitude + 70, RUNWAY.z).addScaledVector(along, -300);
     G.flight.resetTo(p.x, p.y, p.z, RUNWAY.heading, 52);
     G.flight.state.throttle = 0.42;
+    G.flight.state.airborne = true; // v8.1: gear up in flight
     G.flight.state.pitch = -0.1;
     G.course.state.nextIndex = 12;
     G.course.state.passedCount = 12;
@@ -80,6 +84,9 @@ export function stageShot(name, G) {
     G.setCameraMode('cockpit');
     G.hud.hideMenu();
     G.hud.setCockpit(true);
+    // v8: a burst + tracer down the approach so the cockpit shot reads
+    // as a fight, not a quiet landing.
+    G.battle.stage('cockpit', G.flight.state);
     return true;
   }
   if (name === 'end') {
