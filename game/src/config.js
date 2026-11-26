@@ -94,7 +94,16 @@ export function terrainHeight(x, z) {
   const across = dx * Math.cos(RUNWAY.heading) - dz * Math.sin(RUNWAY.heading);
   const flat = Math.max(0, 1 - Math.max(0, Math.abs(along) - RUNWAY.length / 2) / 60)
     * Math.max(0, 1 - Math.max(0, Math.abs(across) - RUNWAY.width / 2) / 45);
-  return h * (1 - flat) + RUNWAY.altitude * flat - 3;
+  // v7: apron shelf EAST of the strip (terminal, hangars, tower, parked
+  // plane) — same altitude as the runway, feathered at its edges so the
+  // island's slope takes over beyond it. Only the east side: the west side
+  // stays wild hillside. Buildings sit on flat=1 ground at across 15..70.
+  const apronSide = clamp((across - 8) / 10, 0, 1);
+  const apronAlong = Math.max(0, 1 - Math.max(0, Math.abs(along) - 80) / 40);
+  const apronAcross = Math.max(0, 1 - Math.max(0, across - 70) / 30);
+  const apron = apronSide * apronAlong * apronAcross;
+  const flatAll = Math.max(flat, apron);
+  return h * (1 - flatAll) + RUNWAY.altitude * flatAll - 3;
 }
 
 export function clamp(v, lo, hi) {

@@ -58,7 +58,7 @@ export function buildPlaneModel() {
       .map(([r, z]) => new THREE.Vector2(r + extra, z));
   const lathe = (zMin, zMax, extra, phiStart, phiLength, material) => {
     const m = new THREE.Mesh(
-      new THREE.LatheGeometry(profilePoints(zMin, zMax, extra), 24, phiStart, phiLength),
+      new THREE.LatheGeometry(profilePoints(zMin, zMax, extra), 32, phiStart, phiLength), // v7: 32 segments, smoother HD silhouette
       material,
     );
     m.rotation.x = Math.PI / 2;

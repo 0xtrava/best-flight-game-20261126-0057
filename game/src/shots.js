@@ -23,11 +23,11 @@ export function stageShot(name, G) {
     G.flight.state.speed = 0;
     G.setState('menu');
     G.setCameraMode('orbit');
-    G.setOrbitAngle(0.79); // v4 staging RESTORED: the v5 front angle (2.35)
-    // hid the plane's nose behind the menu card and filled the frame with
-    // flat hillside. From the south-east the plane sits fully right of the
-    // card, palms + sky behind it. The v5 plane detail shows here too.
-    G.setOrbitRadius(14);
+    G.setOrbitAngle(-0.6); // v7: camera WSW looking NE — the airport
+    // (terminal, hangars, tower, parked plane, 45 m east of the strip) is
+    // in frame behind the plane. The old 0.79 (camera SE looking NW) put
+    // the airport ~112° off-axis, behind the camera: invisible.
+    G.setOrbitRadius(16);
     document.body.classList.add('shot-frame');
     G.hud.showMenu(0);
     return true;
@@ -97,8 +97,8 @@ export function stageShot(name, G) {
     G.setElapsed(522);
     G.setState('results');
     G.setCameraMode('orbit');
-    G.setOrbitAngle(0.79); // v4 staging restored (same card problem as menu)
-    G.setOrbitRadius(13);
+    G.setOrbitAngle(-0.6); // v7: same as menu — airport in frame behind the plane
+    G.setOrbitRadius(16);
     document.body.classList.add('shot-frame');
     // Landed: no next ring to point at.
     document.getElementById('chevron').style.display = 'none';

@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { WORLD, RUNWAY, PEAKS, terrainHeight, mulberry32, clamp } from './config.js';
 import { buildTrees } from './trees.js';
+import { buildPlaneModel } from './plane.js'; // v7: the parked plane by the hangar
 
 function canvasTexture(size, draw) {
   const c = document.createElement('canvas');
@@ -72,7 +73,7 @@ function buildSky(scene, rng) {
 }
 
 function buildTerrain(scene) {
-  const SEG = 150;
+  const SEG = 200; // v7: denser mesh (was 150) — smoother hills, crisper HD read
   const geo = new THREE.PlaneGeometry(WORLD.size, WORLD.size, SEG, SEG);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
@@ -109,9 +110,13 @@ function buildTerrain(scene) {
     }
     const patch3 = 0.5 + 0.5 * Math.sin(x * 0.071 + 0.5) * Math.sin(z * 0.063 - 0.8);
     const patch4 = 0.5 + 0.5 * Math.sin(x * 0.19 + 2.2) * Math.sin(z * 0.17 - 0.4);
+    // v7: a fifth, higher-frequency mottle so the ground never reads as flat
+    // colour bands at HD — fine grain over the big patches.
+    const patch5 = 0.5 + 0.5 * Math.sin(x * 0.41 + 1.1) * Math.sin(z * 0.37 - 2.0);
     c.multiplyScalar(0.94 + patch2 * 0.1);
     c.multiplyScalar(0.96 + patch3 * 0.08);
     c.multiplyScalar(0.95 + patch4 * 0.1);
+    c.multiplyScalar(0.97 + patch5 * 0.06);
     colors[i * 3] = c.r;
     colors[i * 3 + 1] = c.g;
     colors[i * 3 + 2] = c.b;
@@ -246,6 +251,222 @@ function buildRunway(scene) {
       group.add(dot);
     }
   }
+  // v7: threshold piano-key stripes at both ends — six white bars across
+  // the strip, the mark of a real runway, not a grey road.
+  for (const end of [-1, 1]) {
+    for (let k = -2; k <= 2; k++) {
+      const bar = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 10), dashMat);
+      bar.rotation.x = -Math.PI / 2;
+      bar.rotation.z = RUNWAY.heading;
+      const d = end * (RUNWAY.length / 2 - 9);
+      const lx = Math.sin(RUNWAY.heading) * d + Math.cos(RUNWAY.heading) * k * 4.6;
+      const lz = Math.cos(RUNWAY.heading) * d - Math.sin(RUNWAY.heading) * k * 4.6;
+      bar.position.set(RUNWAY.x + lx, y + 0.06, RUNWAY.z + lz);
+      group.add(bar);
+    }
+  }
+  // v7: runway numbers. Heading ~7° → runway 01 (south end, read by a
+  // pilot approaching from the south) and 19 (north end). Texture top
+  // points north with rotation.z = heading, south with +PI.
+  const numberTex = (text) => {
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 256;
+    const g = c.getContext('2d');
+    g.clearRect(0, 0, 256, 256);
+    g.fillStyle = '#f5f2e8';
+    g.font = 'bold 150px Arial, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(text, 128, 136);
+    const tex = new THREE.CanvasTexture(c);
+    return tex;
+  };
+  const number = (text, along, rotZ) => {
+    const m = new THREE.Mesh(
+      new THREE.PlaneGeometry(10, 13),
+      new THREE.MeshBasicMaterial({ map: numberTex(text), transparent: true }),
+    );
+    m.rotation.x = -Math.PI / 2;
+    m.rotation.z = rotZ;
+    const lx = Math.sin(RUNWAY.heading) * along;
+    const lz = Math.cos(RUNWAY.heading) * along;
+    m.position.set(RUNWAY.x + lx, y + 0.06, RUNWAY.z + lz);
+    group.add(m);
+  };
+  number('01', RUNWAY.length / 2 - 30, RUNWAY.heading);
+  number('19', -(RUNWAY.length / 2 - 30), RUNWAY.heading + Math.PI);
+  scene.add(group);
+  return group;
+}
+
+// v7: the airport. A proper small island airport east of the strip —
+// terminal, two hangars, control tower, taxiway + apron, windsock, one
+// parked plane. The runway position and heading are NEVER touched (the
+// flight model and landing logic depend on them); everything here sits on
+// the apron shelf (config.js flattens it to runway altitude) at strip
+// level, so the buildings read as standing on the apron, not floating.
+// `along` runs down the runway (south +, north -), `across` runs east (+).
+function runwayPoint(along, across, y) {
+  const h = RUNWAY.heading;
+  return new THREE.Vector3(
+    RUNWAY.x + across * Math.cos(h) + along * Math.sin(h),
+    y,
+    RUNWAY.z - across * Math.sin(h) + along * Math.cos(h),
+  );
+}
+
+function buildAirport(scene) {
+  const group = new THREE.Group();
+  const y = RUNWAY.altitude + 0.2; // apron level = strip level
+  const wallMat = new THREE.MeshLambertMaterial({ color: 0xf2ead8 });
+  const glassMat = new THREE.MeshPhongMaterial({ color: 0x2e5a74, shininess: 160, specular: 0x99ccdd, emissive: 0x1a3344 });
+  const roofMat = new THREE.MeshLambertMaterial({ color: 0x4a5a6a });
+  const hangarMat = new THREE.MeshLambertMaterial({ color: 0x8a94a0 });
+  const doorMat = new THREE.MeshLambertMaterial({ color: 0x2c3138 });
+
+  // Apron slab: concrete under the terminal, hangars and tower. Spans
+  // across 13..73 so it OVERLAPS the strip edge (15) — a 1 m gap there
+  // showed the green terrain below as a band across the menu/end shots.
+  const apron = new THREE.Mesh(
+    new THREE.PlaneGeometry(60, 175),
+    new THREE.MeshLambertMaterial({ color: 0x8f9296 }),
+  );
+  apron.rotation.x = -Math.PI / 2;
+  apron.rotation.z = RUNWAY.heading;
+  apron.position.copy(runwayPoint(0, 43, y));
+  apron.receiveShadow = true;
+  group.add(apron);
+  // Taxiway: strip edge -> apron, at along +45.
+  const taxi = new THREE.Mesh(
+    new THREE.PlaneGeometry(34, 9),
+    new THREE.MeshLambertMaterial({ color: 0x7d8085 }),
+  );
+  taxi.rotation.x = -Math.PI / 2;
+  taxi.rotation.z = RUNWAY.heading;
+  taxi.position.copy(runwayPoint(45, 30, y + 0.02));
+  taxi.receiveShadow = true;
+  group.add(taxi);
+
+  // A building group aligned with the runway: local +Z = along, local +X
+  // = across (east). Walls sit on the apron (base y), never floating.
+  const building = (along, across) => {
+    const g = new THREE.Group();
+    g.position.copy(runwayPoint(along, across, y));
+    g.rotation.y = RUNWAY.heading;
+    group.add(g);
+    return g;
+  };
+  const box = (g, w, h, d, x, yOff, z, mat) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.set(x, yOff + h / 2, z);
+    m.castShadow = true;
+    g.add(m);
+    return m;
+  };
+
+  // Terminal: long white block facing the runway, glass front, flat roof
+  // with an overhang, and a MERIDIAN sign above the glass.
+  const term = building(-10, 50);
+  box(term, 12, 7, 26, 0, 0, 0, wallMat);
+  box(term, 12.6, 5, 24, -0.4, 0.8, 0, glassMat); // glass front, runway side
+  // Mullions break the big blue glass slab into window panes.
+  for (const z of [-6, 0, 6]) {
+    const mull = new THREE.Mesh(new THREE.BoxGeometry(0.18, 5, 0.35), wallMat);
+    mull.position.set(-6.78, 3.3, z);
+    term.add(mull);
+  }
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.4, 24), wallMat);
+  rail.position.set(-6.78, 3.3, 0);
+  term.add(rail);
+  box(term, 14, 0.5, 28, 0, 7, 0, roofMat); // roof overhang
+  const signTex = canvasTexture(256, (g, s) => {
+    g.clearRect(0, 0, s, s);
+    g.fillStyle = '#20344a';
+    g.font = 'bold 52px Arial, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('MERIDIAN', 128, 128);
+  });
+  const sign = new THREE.Mesh(
+    new THREE.PlaneGeometry(11, 2.2),
+    new THREE.MeshBasicMaterial({ map: signTex, transparent: true }),
+  );
+  sign.position.set(-6.85, 6.3, 0); // proud of the glass face, under the roof
+  sign.rotation.y = -Math.PI / 2;
+  term.add(sign);
+
+  // Hangar 1 (north): gable block with a big dark door facing the runway.
+  const h1 = building(52, 52);
+  box(h1, 14, 7, 18, 0, 0, 0, hangarMat);
+  box(h1, 14.6, 5.5, 15, -0.4, 0.5, 0, doorMat);
+  const roof1 = new THREE.Mesh(new THREE.ConeGeometry(13, 3, 4), roofMat); // square base ~18.4, covers 14×18
+  roof1.position.set(0, 8.4, 0);
+  roof1.rotation.y = Math.PI / 4;
+  roof1.castShadow = true;
+  h1.add(roof1);
+  // Hangar 2 (south): same shape, smaller, door facing the runway.
+  const h2 = building(-62, 54);
+  box(h2, 12, 6, 15, 0, 0, 0, hangarMat);
+  box(h2, 12.6, 4.5, 12.5, -0.4, 0.5, 0, doorMat);
+  const roof2 = new THREE.Mesh(new THREE.ConeGeometry(11, 2.6, 4), roofMat); // square base ~15.6, covers 12×15
+  roof2.position.set(0, 7.2, 0);
+  roof2.rotation.y = Math.PI / 4;
+  roof2.castShadow = true;
+  h2.add(roof2);
+
+  // Control tower: slim shaft + glass cab + roof disc, south of the terminal.
+  const tower = building(-82, 44);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.4, 15, 10), wallMat);
+  shaft.position.set(0, 7.5, 0);
+  shaft.castShadow = true;
+  tower.add(shaft);
+  const cab = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 2.6, 2.8, 10), glassMat);
+  cab.position.set(0, 16.2, 0);
+  cab.castShadow = true;
+  tower.add(cab);
+  const cabRoof = new THREE.Mesh(new THREE.CylinderGeometry(3.8, 3.8, 0.5, 10), roofMat);
+  cabRoof.position.set(0, 17.8, 0);
+  tower.add(cabRoof);
+
+  // Windsock: west side near the north end, clear of the approach line.
+  const sock = new THREE.Group();
+  sock.position.copy(runwayPoint(95, -26, y));
+  group.add(sock);
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 7, 6), new THREE.MeshLambertMaterial({ color: 0xd8d8d8 }));
+  pole.position.y = 3.5;
+  pole.castShadow = true;
+  sock.add(pole);
+  const cone = new THREE.Mesh(
+    new THREE.ConeGeometry(0.55, 2.6, 8),
+    new THREE.MeshLambertMaterial({ color: 0xff7a1a }),
+  );
+  cone.rotation.z = Math.PI / 2;
+  cone.position.set(1.4, 6.7, 0);
+  sock.add(cone);
+
+  // Apron floodlight poles: two tall lights so the apron reads at dusk.
+  for (const along of [-58, 48]) {
+    const p = new THREE.Group();
+    p.position.copy(runwayPoint(along, 66, y));
+    group.add(p);
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 9, 6), new THREE.MeshLambertMaterial({ color: 0x666666 }));
+    mast.position.y = 4.5;
+    p.add(mast);
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffe9a8 }));
+    lamp.position.y = 9.1;
+    p.add(lamp);
+  }
+
+  // Parked plane on the open apron south of the terminal: the same Cessna
+  // model, in frame from the menu/end orbit. (At along +45 it sat inside
+  // hangar 1's footprint; at along +28 it fell off the frame's right edge
+  // past the terminal.)
+  const parked = buildPlaneModel();
+  parked.group.position.copy(runwayPoint(-40, 42, RUNWAY.altitude + 2));
+  parked.group.rotation.y = Math.PI / 2 + RUNWAY.heading; // nose toward the runway
+  group.add(parked.group);
+
   scene.add(group);
   return group;
 }
@@ -405,10 +626,13 @@ export function buildWorld(scene, seed = 1) {
     Math.sin(WORLD.sunElevation),
     Math.cos(WORLD.sunElevation) * Math.sin(WORLD.sunAzimuth),
   ).normalize();
-  const sun = new THREE.DirectionalLight(0xffb066, 2.9);
+  const sun = new THREE.DirectionalLight(0xffb066, 3.2); // v7: stronger key for HD contrast
   sun.position.copy(sunDir).multiplyScalar(600);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(2048, 2048); // restored: 1024 did not move the
+  // swiftshader stall at the crash viewpoint (the test's 20 s watchdog
+  // fires on the frozen sim clock by design while crashed), so the
+  // verified 2x screenshots — taken with 2048 — stand as-is.
   sun.shadow.camera.left = -260;
   sun.shadow.camera.right = 260;
   sun.shadow.camera.top = 260;
@@ -419,12 +643,12 @@ export function buildWorld(scene, seed = 1) {
   // Warm fill from the south-west so the plane's shadowed side (and the
   // front view on the runway) stays readable instead of going black.
   // Stronger in v5: the hero camera looks at the plane's shaded side.
-  const fill = new THREE.DirectionalLight(0xffd9b0, 1.15);
+  const fill = new THREE.DirectionalLight(0xffd9b0, 1.05); // v7: a touch less fill — more contrast
   fill.position.set(-350, 220, 550);
   scene.add(fill);
   // Cool rim from the south-east so the plane keeps an edge against the sky
   // and sea on its shadowed side instead of going flat.
-  const rim = new THREE.DirectionalLight(0xbfd4ff, 0.6);
+  const rim = new THREE.DirectionalLight(0xbfd4ff, 0.7); // v7: stronger rim edge
   rim.position.set(350, 240, 650);
   scene.add(rim);
   scene.add(new THREE.HemisphereLight(0x8fb0e0, 0x5a4a3a, 1.8));
@@ -435,6 +659,7 @@ export function buildWorld(scene, seed = 1) {
   const { sea, glitter } = buildSea(scene);
   const clouds = buildClouds(scene, rng);
   buildRunway(scene);
+  buildAirport(scene); // v7: terminal, hangars, tower, taxiway, windsock, parked plane
   buildTown(scene, rng);
   buildCrags(scene);
   buildTrees(scene, seed);
