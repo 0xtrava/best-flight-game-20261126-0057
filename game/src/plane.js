@@ -88,7 +88,7 @@ export function buildPlaneModel() {
   group.traverse((o) => {
     if (o.isMesh) o.castShadow = true;
   });
-  return { group, prop };
+  return { group, prop, canopy };
 }
 
 export function forwardVector(yaw, pitch) {
@@ -107,9 +107,20 @@ export function createFlight() {
     roll: 0,
     speed: 0,
     throttle: 0,
+    airborne: false, // true once the wheels have left the ground
     crashed: false,
     crashReason: '',
   };
+
+  // True while the point sits on the airstrip (a little margin included):
+  // touching down here is a landing or a roll, never a crash.
+  function isOnRunwayStrip(x, z) {
+    const dx = x - RUNWAY.x;
+    const dz = z - RUNWAY.z;
+    const along = dx * Math.sin(RUNWAY.heading) + dz * Math.cos(RUNWAY.heading);
+    const across = dx * Math.cos(RUNWAY.heading) - dz * Math.sin(RUNWAY.heading);
+    return Math.abs(along) < RUNWAY.length / 2 + 6 && Math.abs(across) < RUNWAY.width / 2 + 6;
+  }
 
   function resetTo(x, y, z, yaw, speed = PLANE.cruiseSpeed) {
     state.pos.set(x, y, z);
@@ -118,6 +129,7 @@ export function createFlight() {
     state.roll = 0;
     state.speed = speed;
     state.throttle = 0.55;
+    state.airborne = false;
     state.crashed = false;
     state.crashReason = '';
   }
@@ -141,8 +153,12 @@ export function createFlight() {
 
     const fwd = forwardVector(state.yaw, state.pitch);
     state.pos.addScaledVector(fwd, state.speed * dt);
-    // Stall sink: slow flight loses altitude.
-    if (state.speed < PLANE.minSpeed + 6) {
+
+    const ground = Math.max(terrainHeight(state.pos.x, state.pos.z) + 1.1, 1.1);
+    if (state.pos.y - ground > 4) state.airborne = true;
+    // Stall sink: only while airborne. On the ground the plane rolls, it
+    // never sinks into the runway while it is still building speed.
+    if (state.airborne && state.speed < PLANE.minSpeed + 6) {
       state.pos.y -= (PLANE.minSpeed + 6 - state.speed) * 0.55 * dt;
     }
     // Keep the plane inside the world.
@@ -150,12 +166,19 @@ export function createFlight() {
     state.pos.z = clamp(state.pos.z, -1150, 1150);
     state.pos.y = clamp(state.pos.y, 0.5, 420);
 
-    // Collision: terrain or sea.
-    const ground = Math.max(terrainHeight(state.pos.x, state.pos.z) + 1.1, 1.1);
-    if (state.pos.y <= ground) {
-      state.crashed = true;
-      state.crashReason = state.pos.y <= 1.2 && terrainHeight(state.pos.x, state.pos.z) < 0 ? 'sea' : 'ground';
-      state.pos.y = ground;
+    // Touchdown / collision: the strip is always safe to touch; anywhere
+    // else, hitting the ground while airborne is a crash. Rolling on rough
+    // ground without ever getting airborne just follows the terrain.
+    const groundNow = Math.max(terrainHeight(state.pos.x, state.pos.z) + 1.1, 1.1);
+    if (state.pos.y <= groundNow) {
+      if (isOnRunwayStrip(state.pos.x, state.pos.z) || !state.airborne) {
+        state.pos.y = groundNow;
+        state.airborne = false;
+      } else {
+        state.crashed = true;
+        state.crashReason = state.pos.y <= 1.2 && terrainHeight(state.pos.x, state.pos.z) < 0 ? 'sea' : 'ground';
+        state.pos.y = groundNow;
+      }
     }
   }
 

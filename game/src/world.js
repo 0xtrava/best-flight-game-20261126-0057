@@ -79,10 +79,10 @@ function buildTerrain(scene) {
     const h = terrainHeight(x, z);
     pos.setY(i, h);
     const patch = 0.5 + 0.5 * Math.sin(x * 0.013 + 2.0) * Math.sin(z * 0.011 - 1.0);
-    if (h < 1.2) c.copy(sand);
-    else if (h < 16) c.copy(grassA).lerp(grassB, patch);
-    else if (h < 34) c.copy(grassB).lerp(forest, clamp((h - 16) / 18, 0, 1));
-    else c.copy(forest).lerp(rock, clamp((h - 34) / 26, 0, 1));
+    if (h < 1.5) c.copy(sand);
+    else if (h < 26) c.copy(grassA).lerp(grassB, patch);
+    else if (h < 55) c.copy(grassB).lerp(forest, clamp((h - 26) / 29, 0, 1));
+    else c.copy(forest).lerp(rock, clamp((h - 55) / 40, 0, 1) * 0.7);
     // Farmland stripes on the gentle slopes of the main island.
     if (h > 2 && h < 22) {
       const stripe = Math.sin((x + z) * 0.11) > 0 ? 1 : 0.88;
@@ -217,9 +217,11 @@ function buildTown(scene, rng) {
   const positions = [];
   for (let i = 0; i < 46; i++) {
     const a = rng() * Math.PI * 2;
-    const r = 55 + rng() * 150;
-    const x = RUNWAY.x + 90 + Math.cos(a) * r * 0.9;
-    const z = RUNWAY.z + 60 + Math.sin(a) * r * 0.7;
+    const r = 50 + rng() * 110;
+    // Town sits well east of the strip so the runway and the final approach
+    // stay clear of buildings.
+    const x = RUNWAY.x + 170 + Math.cos(a) * r * 0.9;
+    const z = RUNWAY.z + 110 + Math.sin(a) * r * 0.7;
     positions.push([x, z]);
   }
   for (const [x, z] of positions) {
@@ -227,14 +229,14 @@ function buildTown(scene, rng) {
     if (h < 1) continue;
     const w = 10 + rng() * 14;
     const d = 10 + rng() * 12;
-    const tall = 8 + rng() * 16;
+    const tall = 7 + rng() * 11;
     const box = new THREE.Mesh(new THREE.BoxGeometry(w, tall, d), base);
     box.position.set(x, h + tall / 2 - 0.5, z);
     box.rotation.y = rng() * Math.PI;
     box.castShadow = true;
     group.add(box);
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) * 0.75, 4 + rng() * 3, 4), roofs);
-    roof.position.set(x, h + tall + 2, z);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) * 0.6, 3 + rng() * 2.5, 4), roofs);
+    roof.position.set(x, h + tall + 1.4, z);
     roof.rotation.y = Math.PI / 4 + rng() * 0.4;
     group.add(roof);
     // One glowing window wall per building, facing the runway.

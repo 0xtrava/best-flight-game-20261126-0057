@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MERIDIAN RUN — Golden-Hour Island Flight</title>
+<link rel="icon" href="data:,">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 100%; height: 100%; overflow: hidden; background: #1a2a44;
@@ -71,6 +72,11 @@
   /* ---- overlays ---- */
   .overlay { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
     background: radial-gradient(ellipse at 50% 40%, rgba(20, 30, 55, 0.25), rgba(8, 12, 24, 0.72)); }
+  /* Staged screenshots: cards slide left so the plane and runway stay visible. */
+  body.shot-frame .overlay { justify-content: flex-start; padding-left: 48px;
+    background: linear-gradient(to right, rgba(8, 12, 24, 0.72) 0%, rgba(8, 12, 24, 0.25) 55%, rgba(8, 12, 24, 0) 78%); }
+  body.shot-frame .card { max-width: 470px; padding: 28px 34px; }
+  body.shot-frame .card h1 { font-size: 44px; }
   .card { text-align: center; max-width: 560px; padding: 34px 44px; border-radius: 18px;
     background: rgba(10, 20, 38, 0.72); border: 1px solid rgba(255, 210, 140, 0.4);
     box-shadow: 0 0 40px rgba(255, 160, 60, 0.2); backdrop-filter: blur(8px); }

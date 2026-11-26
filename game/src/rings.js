@@ -31,7 +31,7 @@ export function createCourse(scene) {
 
     // A light beam above the ring so the course reads from far away.
     const beam = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.1, 2.6, 90, 8, 1, true),
+      new THREE.CylinderGeometry(0.8, 1.6, 90, 8, 1, true),
       new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.0, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }),
     );
     beam.position.set(r.x, r.y + 45, r.z);
@@ -84,7 +84,7 @@ export function createCourse(scene) {
     ring.torus.material.opacity = opacities[kind];
     ring.disc.material.color.setHex(colors[kind]);
     ring.disc.material.opacity = kind === 'next' ? 0.14 : 0.06;
-    ring.beam.material.opacity = kind === 'next' ? 0.16 : 0;
+    ring.beam.material.opacity = kind === 'next' ? 0.07 : 0;
   }
 
   function refreshLooks() {

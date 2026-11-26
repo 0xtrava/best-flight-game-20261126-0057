@@ -75,10 +75,15 @@ export function createHud() {
       el.pause.classList.add('hidden');
       el.hud.classList.add('dim');
       el.menuBest.textContent = best > 0 ? `Best score: ${best.toLocaleString('en-US')}` : 'First flight — good luck, pilot.';
+      // The menu card already explains the rings; keep the chevron off it.
+      document.getElementById('chevron').style.display = 'none';
+      document.getElementById('target-box').style.display = 'none';
     },
     hideMenu() {
       el.menu.classList.add('hidden');
       el.hud.classList.remove('dim');
+      document.getElementById('chevron').style.display = '';
+      document.getElementById('target-box').style.display = '';
     },
     showPause(show) {
       el.pause.classList.toggle('hidden', !show);
@@ -97,12 +102,16 @@ export function createHud() {
     },
     setCockpit(on) {
       el.dash.classList.toggle('hidden', !on);
+      // In the cockpit the dashboard shows the same numbers: hide the
+      // floating attitude panel and the key hint so the view stays clean.
+      document.getElementById('panel-attitude').classList.toggle('hidden', on);
+      document.getElementById('hint').classList.toggle('hidden', on);
     },
     // Called every frame while flying.
     update(flight, course, elapsed, cameraMode) {
       const { pos, speed, throttle, pitch, roll, yaw } = flight;
       const knots = Math.round(speed * 1.9);
-      const feet = Math.round((pos.y - 0) * 3.28 * 10);
+      const feet = Math.round(pos.y * 3.28);
       const deg = headingDeg(yaw);
       el.alt.textContent = `${feet.toLocaleString('en-US')} ft`;
       el.spd.textContent = `${knots} kt`;

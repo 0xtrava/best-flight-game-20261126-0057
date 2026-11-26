@@ -2,7 +2,7 @@
 // One clear job: wire the world, plane, course, HUD and sound into a game.
 
 import * as THREE from 'three';
-import { RUNWAY, PLANE, clamp } from './config.js';
+import { RUNWAY, RINGS, PLANE, clamp } from './config.js';
 import { createInput } from './input.js';
 import { createAudio } from './audio.js';
 import { buildWorld } from './world.js';
@@ -66,12 +66,37 @@ function main() {
     course,
     hud,
     camera,
+    RINGS,
+    RUNWAY,
+    startFlight,
+    get state() {
+      return gameState;
+    },
+    get cameraMode() {
+      return cameraMode;
+    },
+    getState() {
+      return gameState;
+    },
+    getCameraMode() {
+      return cameraMode;
+    },
+    getBest() {
+      return bestScore();
+    },
+    getElapsed() {
+      return elapsed;
+    },
     setState(s) {
       gameState = s;
     },
     setCameraMode(m) {
       cameraMode = m;
       hud.setCockpit(m === 'cockpit');
+      plane.canopy.visible = m !== 'cockpit';
+    },
+    setOrbitAngle(a) {
+      orbitAngle = a;
     },
     setElapsed(s) {
       elapsed = s;
@@ -140,17 +165,13 @@ function main() {
   }
 
   function updateCockpitCamera() {
+    // Sit just behind and above the canopy, looking over the nose: the prop,
+    // the runway and the instruments stay in frame, the canopy stays out of it.
     const fwd = forwardVector(flight.state.yaw, flight.state.pitch);
     const up = new THREE.Vector3(0, 1, 0);
-    const right = new THREE.Vector3().crossVectors(fwd, up).normalize();
-    const pos = flight.state.pos.clone()
-      .addScaledVector(up, 1.15)
-      .addScaledVector(fwd, 0.4)
-      .addScaledVector(right, 0);
+    const pos = flight.state.pos.clone().addScaledVector(up, 1.7).addScaledVector(fwd, -1.7);
     camera.position.copy(pos);
-    const look = flight.state.pos.clone().addScaledVector(fwd, 120).addScaledVector(up, -4);
-    camera.up.set(0, 1, 0);
-    camera.lookAt(look);
+    const look = flight.state.pos.clone().addScaledVector(fwd, 120).addScaledVector(up, -5);
     // Roll the horizon with the plane: tilt the camera up vector.
     camera.up.set(Math.sin(-flight.state.roll), Math.cos(flight.state.roll), 0);
     camera.lookAt(look);
@@ -158,11 +179,11 @@ function main() {
 
   function updateOrbitCamera(dt) {
     orbitAngle += dt * 0.07;
-    const r = 24;
+    const r = 34;
     const target = flight.state.pos.clone().add(new THREE.Vector3(0, 1.5, 0));
     camera.position.set(
       target.x + Math.sin(orbitAngle) * r,
-      target.y + 7.5,
+      target.y + 12,
       target.z + Math.cos(orbitAngle) * r,
     );
     camera.lookAt(target);
@@ -277,20 +298,7 @@ function main() {
     }
   }
 
-  window.__game = {
-    get state() {
-      return gameState;
-    },
-    get cameraMode() {
-      return cameraMode;
-    },
-    flight,
-    course,
-    startFlight,
-    setState(s) {
-      gameState = s;
-    },
-  };
+  window.__game = api;
   window.addEventListener('error', (e) => {
     window.__gameErrors = window.__gameErrors || [];
     window.__gameErrors.push(String(e.message || e.error));

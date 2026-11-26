@@ -23,6 +23,8 @@ export function stageShot(name, G) {
     G.flight.state.speed = 0;
     G.setState('menu');
     G.setCameraMode('orbit');
+    G.setOrbitAngle(2.5); // from the north-east: the sun lights the plane's nose
+    document.body.classList.add('shot-frame');
     G.hud.showMenu(0);
     return true;
   }
@@ -49,12 +51,13 @@ export function stageShot(name, G) {
     return true;
   }
   if (name === 'cockpit') {
-    // Final approach: low over the sea, runway dead ahead, instruments lit.
+    // Final approach: high enough to see the strip over the island's rise,
+    // offset west so the runway is dead ahead and the town stays to the left.
     const along = new THREE.Vector3(Math.sin(RUNWAY.heading), 0, Math.cos(RUNWAY.heading));
-    const p = new THREE.Vector3(RUNWAY.x, RUNWAY.altitude + 42, RUNWAY.z).addScaledVector(along, -420);
+    const p = new THREE.Vector3(RUNWAY.x - 60, RUNWAY.altitude + 70, RUNWAY.z).addScaledVector(along, -300);
     G.flight.resetTo(p.x, p.y, p.z, RUNWAY.heading, 52);
     G.flight.state.throttle = 0.42;
-    G.flight.state.pitch = -0.06;
+    G.flight.state.pitch = -0.1;
     G.course.state.nextIndex = 12;
     G.course.state.passedCount = 12;
     G.course.state.score = 6400;
@@ -84,6 +87,11 @@ export function stageShot(name, G) {
     G.setElapsed(522);
     G.setState('results');
     G.setCameraMode('orbit');
+    G.setOrbitAngle(2.5);
+    document.body.classList.add('shot-frame');
+    // Landed: no next ring to point at.
+    document.getElementById('chevron').style.display = 'none';
+    document.getElementById('target-box').style.display = 'none';
     G.hud.hideMenu();
     G.hud.showResults({
       score: 9840,
