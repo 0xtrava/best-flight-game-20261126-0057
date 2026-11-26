@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MERIDIAN RUN — Golden-Hour Island Flight</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #1a2a44;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif; color: #fff; }
+  #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .hidden { display: none !important; }
+
+  /* ---- HUD ---- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  #hud.dim { opacity: 0.35; }
+  .panel { position: absolute; background: rgba(10, 22, 40, 0.55); border: 1px solid rgba(255, 210, 140, 0.35);
+    border-radius: 12px; padding: 10px 14px; backdrop-filter: blur(6px);
+    box-shadow: 0 0 18px rgba(255, 160, 60, 0.15), inset 0 0 24px rgba(255, 190, 90, 0.06); }
+  .label { font-size: 10px; letter-spacing: 2px; color: #ffcf8a; opacity: 0.9; }
+  .value { font-size: 26px; font-weight: 700; color: #fff; text-shadow: 0 0 12px rgba(255, 190, 90, 0.65); line-height: 1.1; }
+  .unit { font-size: 12px; color: #cfe0ff; }
+  #panel-flight { top: 14px; left: 14px; display: flex; gap: 18px; }
+  #panel-score { top: 14px; right: 14px; text-align: right; }
+  #panel-score .value { font-size: 30px; color: #ffd27a; }
+  #compass-wrap { position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    width: 240px; height: 34px; overflow: hidden; border-radius: 8px;
+    background: rgba(10, 22, 40, 0.55); border: 1px solid rgba(255, 210, 140, 0.35); }
+  #compass-strip { position: absolute; top: 0; left: 0; width: 1440px; height: 34px; }
+  #compass-strip .tick { position: absolute; top: 7px; font-size: 13px; font-weight: 700; color: #ffe1ae;
+    transform: translateX(-50%); text-shadow: 0 0 8px rgba(255, 190, 90, 0.6); }
+  #compass-needle { position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    color: #ff9a1f; font-size: 12px; }
+  /* artificial horizon + throttle, bottom centre */
+  #panel-attitude { bottom: 16px; left: 50%; transform: translateX(-50%); display: flex; gap: 16px; align-items: center; }
+  #horizon-disc { width: 74px; height: 74px; border-radius: 50%; overflow: hidden; position: relative;
+    border: 2px solid rgba(255, 210, 140, 0.6); background: linear-gradient(#2f6fb4 50%, #7a5a34 50%); }
+  #horizon-line { position: absolute; left: -10%; top: 50%; width: 120%; height: 3px; background: #fff;
+    box-shadow: 0 0 8px #fff; }
+  #horizon-disc::after { content: ""; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px;
+    background: #ffb347; border-radius: 50%; transform: translate(-50%, -50%); }
+  #throttle-wrap { width: 14px; height: 74px; border-radius: 7px; background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255, 210, 140, 0.4); position: relative; overflow: hidden; }
+  #throttle-fill { position: absolute; bottom: 0; left: 0; width: 100%; height: 55%;
+    background: linear-gradient(to top, #ff9a1f, #ffd27a); }
+  #throttle-label { font-size: 10px; letter-spacing: 2px; color: #ffcf8a; writing-mode: vertical-rl; }
+  /* next-ring chevron, centre screen */
+  #chevron { position: absolute; left: 50%; top: 42%; font-size: 34px; color: #ffb347;
+    text-shadow: 0 0 14px rgba(255, 160, 40, 0.9); transition: opacity 0.2s; }
+  #target-box { position: absolute; left: 50%; top: 42%; transform: translate(-50%, 44px); text-align: center; }
+  #target-label { font-size: 12px; letter-spacing: 3px; color: #ffd27a; text-shadow: 0 0 10px rgba(255,160,40,0.8); }
+  #target-dist { font-size: 20px; font-weight: 700; }
+  #hint { position: absolute; bottom: 16px; left: 14px; font-size: 12px; color: rgba(255,255,255,0.75);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.6); line-height: 1.6; }
+  #toast { position: absolute; left: 50%; top: 24%; transform: translate(-50%, -50%) scale(0.9);
+    font-size: 34px; font-weight: 800; color: #ffd27a; opacity: 0;
+    text-shadow: 0 0 22px rgba(255, 160, 40, 0.9), 0 2px 6px rgba(0,0,0,0.7);
+    transition: opacity 0.18s, transform 0.18s; white-space: nowrap; }
+  #toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+  /* ---- cockpit dashboard strip ---- */
+  #dash { position: fixed; left: 0; right: 0; bottom: 0; height: 118px; z-index: 6; pointer-events: none;
+    background: linear-gradient(to top, rgba(8, 10, 16, 0.96) 55%, rgba(8, 10, 16, 0)); }
+  #dash .gauges { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 26px; }
+  .gauge { width: 78px; height: 78px; border-radius: 50%; text-align: center; padding-top: 16px;
+    background: radial-gradient(circle at 50% 38%, #2a3648, #0c1220 72%);
+    border: 3px solid #3a4a63; box-shadow: inset 0 0 16px rgba(120, 200, 255, 0.35), 0 0 14px rgba(0,0,0,0.6); }
+  .gauge .g-label { font-size: 9px; letter-spacing: 2px; color: #7fd4ff; }
+  .gauge .g-value { font-size: 19px; font-weight: 700; color: #eaf7ff; text-shadow: 0 0 10px rgba(110, 200, 255, 0.9); }
+
+  /* ---- overlays ---- */
+  .overlay { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at 50% 40%, rgba(20, 30, 55, 0.25), rgba(8, 12, 24, 0.72)); }
+  .card { text-align: center; max-width: 560px; padding: 34px 44px; border-radius: 18px;
+    background: rgba(10, 20, 38, 0.72); border: 1px solid rgba(255, 210, 140, 0.4);
+    box-shadow: 0 0 40px rgba(255, 160, 60, 0.2); backdrop-filter: blur(8px); }
+  .card h1 { font-size: 52px; letter-spacing: 6px; color: #ffd27a;
+    text-shadow: 0 0 26px rgba(255, 170, 60, 0.8); }
+  .card h2 { font-size: 15px; letter-spacing: 4px; color: #9fd4ff; margin-top: 4px; font-weight: 600; }
+  .card p { margin-top: 16px; font-size: 14px; line-height: 1.7; color: #e8eefc; }
+  .card .controls { margin-top: 14px; font-size: 13px; line-height: 2; color: #cfe0ff; text-align: left;
+    display: inline-block; }
+  .card .controls b { color: #ffd27a; }
+  .card .cta { margin-top: 20px; font-size: 17px; font-weight: 700; color: #1a2a44; background: #ffb347;
+    display: inline-block; padding: 11px 26px; border-radius: 999px; box-shadow: 0 0 22px rgba(255, 170, 60, 0.7); }
+  .card .best { margin-top: 14px; font-size: 13px; color: #ffcf8a; }
+  #results-score { font-size: 56px; font-weight: 800; color: #ffd27a; text-shadow: 0 0 26px rgba(255,170,60,0.8); }
+  #results-detail { margin-top: 8px; font-size: 15px; color: #e8eefc; }
+  #results-best { margin-top: 10px; font-size: 14px; color: #9fd4ff; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div id="hud">
+  <div class="panel" id="panel-flight">
+    <div><div class="label">ALTITUDE</div><div class="value" id="hud-alt">0 ft</div></div>
+    <div><div class="label">SPEED</div><div class="value" id="hud-spd">0 kt</div></div>
+    <div><div class="label">HEADING</div><div class="value" id="hud-hdg">000° N</div></div>
+  </div>
+  <div id="compass-wrap"><div id="compass-strip"></div><div id="compass-needle">▼</div></div>
+  <div class="panel" id="panel-score">
+    <div class="label">SCORE</div><div class="value" id="hud-score">0</div>
+    <div class="label" style="margin-top:6px">RINGS <span id="hud-rings" style="color:#fff;font-size:15px">0/12</span>
+      &nbsp;·&nbsp; TIME <span id="hud-time" style="color:#fff;font-size:15px">00:00</span></div>
+  </div>
+  <div class="panel" id="panel-attitude">
+    <div id="horizon-disc"><div id="horizon-line"></div></div>
+    <div id="throttle-wrap"><div id="throttle-fill"></div></div>
+    <div id="throttle-label">THR</div>
+  </div>
+  <div id="chevron">▲</div>
+  <div id="target-box"><div id="target-label">RING 1</div><div id="target-dist">0 m</div></div>
+  <div id="hint">↑/W climb · ↓/S dive · ←/→ bank · Q/E rudder<br>Shift throttle up · Ctrl throttle down · C camera · P pause · M mute</div>
+  <div id="toast"></div>
+</div>
+
+<div id="dash" class="hidden">
+  <div class="gauges">
+    <div class="gauge"><div class="g-label">ALT FT</div><div class="g-value" id="dash-alt">0</div></div>
+    <div class="gauge"><div class="g-label">KNOTS</div><div class="g-value" id="dash-spd">0</div></div>
+    <div class="gauge"><div class="g-label">HEADING</div><div class="g-value" id="dash-hdg">000°</div></div>
+    <div class="gauge"><div class="g-label">THROTTLE</div><div class="g-value" id="dash-thr">0%</div></div>
+  </div>
+</div>
+
+<div class="overlay" id="menu">
+  <div class="card">
+    <h1>MERIDIAN RUN</h1>
+    <h2>GOLDEN-HOUR ISLAND FLIGHT</h2>
+    <p>Take off from the coastal strip, thread all twelve glowing rings over the
+      archipelago, then bring her home and land on the runway. Sunset waits for no pilot.</p>
+    <div class="controls">
+      <b>↑ / W</b> climb &nbsp; <b>↓ / S</b> dive &nbsp; <b>← → / A D</b> bank &amp; turn<br>
+      <b>Q / E</b> rudder &nbsp; <b>Shift</b> throttle up &nbsp; <b>Ctrl</b> throttle down<br>
+      <b>C</b> cockpit camera &nbsp; <b>P</b> pause &nbsp; <b>M</b> mute
+    </div>
+    <div><span class="cta">PRESS ENTER OR CLICK TO FLY</span></div>
+    <div class="best" id="menu-best"></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="pause">
+  <div class="card">
+    <h1 style="font-size:36px">PAUSED</h1>
+    <p>Press P to keep flying.</p>
+  </div>
+</div>
+
+<div class="overlay hidden" id="results">
+  <div class="card">
+    <h1 style="font-size:36px">LANDED!</h1>
+    <div id="results-score">0</div>
+    <div id="results-detail"></div>
+    <div id="results-best"></div>
+    <div><span class="cta">PRESS ENTER TO FLY AGAIN</span></div>
+  </div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
